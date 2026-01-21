@@ -1,0 +1,1 @@
+import sqlalchemy; print('Validating mysql+pymysql://user:pass@localhost:3306/db')

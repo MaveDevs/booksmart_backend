@@ -1,0 +1,1 @@
+from app.core.security import get_password_hash; print(f'Hash OK: {{get_password_hash("mike")}}')

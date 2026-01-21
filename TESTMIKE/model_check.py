@@ -1,0 +1,1 @@
+from app.db.base_class import Base; print('SQLAlchemy Metadata loaded.')
