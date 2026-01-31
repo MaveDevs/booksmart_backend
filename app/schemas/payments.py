@@ -1,10 +1,9 @@
 import enum
-
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PaymentMethod(str, enum.Enum):
@@ -22,14 +21,20 @@ class PaymentStatus(str, enum.Enum):
 
 class PaymentBase(BaseModel):
 	suscripcion_id: int
-	monto: Decimal
+	monto: Decimal = Field(..., ge=0)
 	metodo_pago: PaymentMethod
-	transaccion_id: Optional[str] = None
 	estado: PaymentStatus = PaymentStatus.PENDIENTE
 
 
 class PaymentCreate(PaymentBase):
 	pass
+
+
+class PaymentUpdate(BaseModel):
+	suscripcion_id: Optional[int] = None
+	monto: Optional[Decimal] = Field(None, ge=0)
+	metodo_pago: Optional[PaymentMethod] = None
+	estado: Optional[PaymentStatus] = None
 
 
 class PaymentResponse(PaymentBase):

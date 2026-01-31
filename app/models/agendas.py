@@ -17,16 +17,20 @@ class DayOfWeek(str, enum.Enum):
 
 
 class Agenda(Base):
-	__tablename__ = "Agenda"
+	__tablename__ = "agenda"
 	__table_args__ = (
-		UniqueConstraint("trabajador_id", "dia_semana", name="unique_trabajador_dia"),
+		UniqueConstraint("establecimiento_id", "dia_semana", name="unique_establecimiento_dia"),
 	)
 
 	agenda_id = Column(Integer, primary_key=True, autoincrement=True)
-	trabajador_id = Column(Integer, ForeignKey("Trabajador.trabajador_id", ondelete="CASCADE"), nullable=False)
-	dia_semana = Column(Enum(DayOfWeek), nullable=False)
+	establecimiento_id = Column(
+		Integer,
+		ForeignKey("establecimiento.establecimiento_id", ondelete="CASCADE"),
+		nullable=False,
+	)
+	dia_semana = Column(Enum(DayOfWeek, native_enum=False), nullable=False)
 	hora_inicio = Column(Time, nullable=False)
 	hora_fin = Column(Time, nullable=False)
 
-	worker = relationship("Worker", back_populates="agendas")
+	establishment = relationship("Establishment", back_populates="agendas")
 

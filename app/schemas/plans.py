@@ -1,21 +1,25 @@
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PlanBase(BaseModel):
-	nombre: str
+	nombre: str = Field(..., min_length=1, max_length=50)
 	descripcion: Optional[str] = None
-	precio_mensual: Decimal
-	max_servicios: int = 10
-	max_trabajadores: int = 5
-	max_citas_mes: int = 100
+	precio: Decimal = Field(..., ge=0)
 	activo: bool = True
 
 
 class PlanCreate(PlanBase):
 	pass
+
+
+class PlanUpdate(BaseModel):
+	nombre: Optional[str] = Field(None, min_length=1, max_length=50)
+	descripcion: Optional[str] = None
+	precio: Optional[Decimal] = Field(None, ge=0)
+	activo: Optional[bool] = None
 
 
 class PlanResponse(PlanBase):

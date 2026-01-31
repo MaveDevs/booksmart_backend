@@ -6,6 +6,7 @@ from logging.config import fileConfig
 from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
+from sqlalchemy import text
 from sqlalchemy import pool
 
 from app.db.base_class import Base
@@ -29,6 +30,44 @@ if _database_url:
 
 
 target_metadata = Base.metadata
+
+
+def _seed_default_roles(connection) -> None:
+	# Ensure table exists and capture the real name (Windows may store it lowercase).
+	table_name = connection.execute(
+		text(
+			"""
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = DATABASE()
+			  AND LOWER(table_name) = 'rol'
+			LIMIT 1
+			"""
+		)
+	).scalar()
+	if not table_name:
+		return
+
+	# Idempotent seed: insert if missing, update if present.
+	connection.execute(
+		text(
+			f"""
+			INSERT INTO `{table_name}` (`rol_id`, `nombre`, `descripcion`) VALUES
+				(1, 'CLIENTE', 'Usuario final que reserva citas'),
+				(2, 'Dueño', 'Dueño de establecimiento'),
+				(3, 'Admin', 'Administrador del sistema')
+			ON DUPLICATE KEY UPDATE
+				`nombre` = VALUES(`nombre`),
+				`descripcion` = VALUES(`descripcion`)
+			"""
+		)
+	)
+
+	# Make sure changes persist even if Alembic ran a no-op migration.
+	try:
+		connection.commit()
+	except Exception:
+		pass
 
 
 def run_migrations_offline() -> None:
@@ -62,6 +101,9 @@ def run_migrations_online() -> None:
 
 		with context.begin_transaction():
 			context.run_migrations()
+
+		# Seed data outside of Alembic's migration transaction.
+		_seed_default_roles(connection)
 
 
 if context.is_offline_mode():

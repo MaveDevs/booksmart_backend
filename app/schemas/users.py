@@ -1,108 +1,68 @@
-import enum
-
+import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-class RoleBase(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
+# Toggle for password validation - set to True for production
+ENABLE_PASSWORD_VALIDATION = False
 
 
-class RoleCreate(RoleBase):
-    pass
+def validate_password_strength(password: str) -> str:
+    """Validate password meets security requirements."""
+    if not ENABLE_PASSWORD_VALIDATION:
+        return password
+    
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain at least one digit")
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        raise ValueError("Password must contain at least one special character")
+    return password
 
-
-class RoleResponse(RoleBase):
-    rol_id: int
-
-    class Config:
-        from_attributes = True
 
 class UserBase(BaseModel):
-    nombre: str
-    apellido: str
-    correo: EmailStr
+    nombre: str = Field(..., min_length=1, max_length=50)
+    apellido: str = Field(..., min_length=1, max_length=50)
+    correo: EmailStr = Field(..., max_length=100)
     rol_id: Optional[int] = None
     activo: bool = True
 
+
 class UserCreate(UserBase):
-    contrasena: str
+    contrasena: str = Field(..., min_length=1)
+
+    @field_validator("contrasena")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 
 class UserUpdate(BaseModel):
-    nombre: Optional[str] = None
-    apellido: Optional[str] = None
+    nombre: Optional[str] = Field(None, min_length=1, max_length=50)
+    apellido: Optional[str] = Field(None, min_length=1, max_length=50)
     correo: Optional[EmailStr] = None
     contrasena: Optional[str] = None
     rol_id: Optional[int] = None
     activo: Optional[bool] = None
 
+    @field_validator("contrasena")
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_password_strength(v)
+
+
 class UserResponse(UserBase):
     usuario_id: int
     fecha_creacion: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class NotificationType(str, enum.Enum):
-    INFO = "INFO"
-    ALERTA = "ALERTA"
-    RECORDATORIO = "RECORDATORIO"
-
-
-class NotificationBase(BaseModel):
-    usuario_id: int
-    mensaje: str
-    tipo: NotificationType
-    leido: bool = False
-
-
-class NotificationCreate(NotificationBase):
-    pass
-
-
-class NotificationResponse(NotificationBase):
-    notificacion_id: int
-    fecha_envio: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ReportType(str, enum.Enum):
-    USUARIO = "USUARIO"
-    ESTABLECIMIENTO = "ESTABLECIMIENTO"
-    SERVICIO = "SERVICIO"
-    CITA = "CITA"
-    TRABAJADOR = "TRABAJADOR"
-
-
-class ReportStatus(str, enum.Enum):
-    PENDIENTE = "PENDIENTE"
-    EN_REVISION = "EN_REVISION"
-    RESUELTO = "RESUELTO"
-    RECHAZADO = "RECHAZADO"
-
-
-class ReportBase(BaseModel):
-    usuario_id: Optional[int] = None
-    tipo: ReportType
-    entidad_id: int
-    descripcion: str
-    estado: ReportStatus = ReportStatus.PENDIENTE
-
-
-class ReportCreate(ReportBase):
-    pass
-
-
-class ReportResponse(ReportBase):
-    reporte_id: int
-    fecha_creacion: datetime
-    fecha_resolucion: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -68,6 +68,13 @@ class ScheduleBlockCreate(ScheduleBlockBase):
     pass
 
 
+class ScheduleBlockUpdate(BaseModel):
+    trabajador_id: Optional[int] = None
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin: Optional[datetime] = None
+    motivo: Optional[str] = None
+
+
 class ScheduleBlockResponse(ScheduleBlockBase):
     bloqueo_id: int
 

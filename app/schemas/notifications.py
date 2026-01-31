@@ -1,8 +1,8 @@
 import enum
-
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class NotificationType(str, enum.Enum):
@@ -13,13 +13,20 @@ class NotificationType(str, enum.Enum):
 
 class NotificationBase(BaseModel):
 	usuario_id: int
-	mensaje: str
+	mensaje: str = Field(..., min_length=1)
 	tipo: NotificationType
-	leido: bool = False
+	leida: bool = False
 
 
 class NotificationCreate(NotificationBase):
 	pass
+
+
+class NotificationUpdate(BaseModel):
+	usuario_id: Optional[int] = None
+	mensaje: Optional[str] = Field(None, min_length=1)
+	tipo: Optional[NotificationType] = None
+	leida: Optional[bool] = None
 
 
 class NotificationResponse(NotificationBase):

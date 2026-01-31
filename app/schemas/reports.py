@@ -1,42 +1,26 @@
-import enum
-
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
-
-
-class ReportType(str, enum.Enum):
-	USUARIO = "USUARIO"
-	ESTABLECIMIENTO = "ESTABLECIMIENTO"
-	SERVICIO = "SERVICIO"
-	CITA = "CITA"
-	TRABAJADOR = "TRABAJADOR"
-
-
-class ReportStatus(str, enum.Enum):
-	PENDIENTE = "PENDIENTE"
-	EN_REVISION = "EN_REVISION"
-	RESUELTO = "RESUELTO"
-	RECHAZADO = "RECHAZADO"
+from pydantic import BaseModel, Field
 
 
 class ReportBase(BaseModel):
-	usuario_id: Optional[int] = None
-	tipo: ReportType
-	entidad_id: int
-	descripcion: str
-	estado: ReportStatus = ReportStatus.PENDIENTE
+	establecimiento_id: int
+	descripcion: str = Field(..., min_length=1)
 
 
 class ReportCreate(ReportBase):
 	pass
 
 
+class ReportUpdate(BaseModel):
+	establecimiento_id: Optional[int] = None
+	descripcion: Optional[str] = Field(None, min_length=1)
+
+
 class ReportResponse(ReportBase):
 	reporte_id: int
-	fecha_creacion: datetime
-	fecha_resolucion: Optional[datetime] = None
+	fecha_generacion: datetime
 
 	class Config:
 		from_attributes = True

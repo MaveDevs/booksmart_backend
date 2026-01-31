@@ -5,7 +5,7 @@ from app.db.base_class import Base
 
 
 class Role(Base):
-	__tablename__ = "Rol"
+	__tablename__ = "rol"
 
 	rol_id = Column(Integer, primary_key=True, autoincrement=True)
 	nombre = Column(String(50), nullable=False, unique=True)

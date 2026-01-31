@@ -6,15 +6,12 @@ from app.db.base_class import Base
 
 
 class Plan(Base):
-	__tablename__ = "Plan"
+	__tablename__ = "plan"
 
 	plan_id = Column(Integer, primary_key=True, autoincrement=True)
 	nombre = Column(String(50), nullable=False, unique=True)
 	descripcion = Column(Text)
-	precio_mensual = Column(DECIMAL(10, 2), nullable=False)
-	max_servicios = Column(Integer, default=10)
-	max_trabajadores = Column(Integer, default=5)
-	max_citas_mes = Column(Integer, default=100)
+	precio = Column(DECIMAL(10, 2), nullable=False)
 	activo = Column(Boolean, default=True)
 
 	subscriptions = relationship("Subscription", back_populates="plan")

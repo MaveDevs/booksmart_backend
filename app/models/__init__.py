@@ -10,8 +10,6 @@ from .agendas import Agenda
 from .appointments import Appointment
 from .messages import Message
 
-from .workers import Worker, WorkerService, ScheduleBlock
-
 from .notifications import Notification
 from .reports import Report
 

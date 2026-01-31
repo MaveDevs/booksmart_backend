@@ -13,15 +13,14 @@ class SubscriptionStatus(str, enum.Enum):
 
 
 class Subscription(Base):
-	__tablename__ = "Suscripcion"
+	__tablename__ = "suscripcion"
 
 	suscripcion_id = Column(Integer, primary_key=True, autoincrement=True)
-	establecimiento_id = Column(Integer, ForeignKey("Establecimiento.establecimiento_id", ondelete="CASCADE"))
-	plan_id = Column(Integer, ForeignKey("Plan.plan_id", ondelete="RESTRICT"))
+	establecimiento_id = Column(Integer, ForeignKey("establecimiento.establecimiento_id", ondelete="CASCADE"))
+	plan_id = Column(Integer, ForeignKey("plan.plan_id", ondelete="RESTRICT"))
 	fecha_inicio = Column(Date, nullable=False)
 	fecha_fin = Column(Date, nullable=True)
-	estado = Column(Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVA)
-	auto_renovacion = Column(Boolean, default=True)
+	estado = Column(Enum(SubscriptionStatus, native_enum=False), default=SubscriptionStatus.ACTIVA)
 
 	establishment = relationship("Establishment", back_populates="subscriptions")
 	plan = relationship("Plan", back_populates="subscriptions")

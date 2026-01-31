@@ -22,15 +22,14 @@ class PaymentStatus(str, enum.Enum):
 
 
 class Payment(Base):
-	__tablename__ = "Pago"
+	__tablename__ = "pago"
 
 	pago_id = Column(Integer, primary_key=True, autoincrement=True)
-	suscripcion_id = Column(Integer, ForeignKey("Suscripcion.suscripcion_id", ondelete="CASCADE"))
+	suscripcion_id = Column(Integer, ForeignKey("suscripcion.suscripcion_id", ondelete="CASCADE"))
 	monto = Column(DECIMAL(10, 2), nullable=False)
-	metodo_pago = Column(Enum(PaymentMethod), nullable=False)
-	transaccion_id = Column(String(255))
+	metodo_pago = Column(Enum(PaymentMethod, native_enum=False), nullable=False)
 	fecha_pago = Column(TIMESTAMP, server_default=func.now())
-	estado = Column(Enum(PaymentStatus), default=PaymentStatus.PENDIENTE)
+	estado = Column(Enum(PaymentStatus, native_enum=False), default=PaymentStatus.PENDIENTE)
 
 	subscription = relationship("Subscription", back_populates="payments")
 
