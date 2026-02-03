@@ -1,5 +1,4 @@
 # Environment variables
-.env
 .env.local
 .env.*.local
 
@@ -60,7 +59,7 @@ htmlcov/
 dmypy.json
 
 # Alembic 
-alembic/versions/__pycache__/
+alembic/versions/
 
 # Jupyter Notebooks 
 .ipynb_checkpoints/

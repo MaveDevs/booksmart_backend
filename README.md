@@ -10,7 +10,7 @@ python -m venv .venv
 # to install requirements: 
 pip install -r requirements.txt 
 
-# change the .env and alambic/.env.py files to the credentials of your own mysql db (db has to be created before you run the migrations from bellow)
+# change the .env and alambic.ini files to the credentials of your own mysql db (db has to be created before you run the migrations from bellow)
 
 # to get the db populated(terminal with venv activated):
 alembic revision --autogenerate -m "Initial migration"
