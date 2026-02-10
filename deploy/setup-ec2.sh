@@ -34,7 +34,14 @@ sudo systemctl enable mysql
 sudo systemctl start mysql
 
 # Secure MySQL and create the app database/user
-sudo mysql <<EOF
+# Try without password first (fresh install), fall back to using password (re-run)
+if sudo mysql -e "SELECT 1" 2>/dev/null; then
+    MYSQL_CMD="sudo mysql"
+else
+    MYSQL_CMD="mysql -u root -p${DB_ROOT_PASS}"
+fi
+
+$MYSQL_CMD <<EOF
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_ROOT_PASS}';
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
