@@ -16,6 +16,7 @@ from app.core.permissions import (
     get_user_role_name,
     require_admin,
 )
+from app.services.realtime import notify_user
 
 router = APIRouter()
 
@@ -77,14 +78,17 @@ def get_notification(
 
 
 @router.post("/", response_model=NotificationResponse)
-def create_notification(
+async def create_notification(
     notification: NotificationCreate,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(require_admin()),
 ):
     """Only admins/system can create notifications."""
     try:
-        return crud_notifications.create_notification(db, notification)
+        db_notification = crud_notifications.create_notification(db, notification)
+        # Push real-time notification to the target user via WebSocket
+        await notify_user(db_notification.usuario_id, db_notification)
+        return db_notification
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

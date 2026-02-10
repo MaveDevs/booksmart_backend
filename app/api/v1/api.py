@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
 	services,
 	subscriptions,
 	users,
+	ws,
 )
 
 api_router = APIRouter()
@@ -34,3 +35,6 @@ api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(rol.router, prefix="/roles", tags=["roles"])
+
+# WebSocket route (no prefix — it's already /ws inside the router)
+api_router.include_router(ws.router, tags=["websocket"])
