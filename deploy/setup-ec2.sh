@@ -5,11 +5,11 @@
 # =============================================================================
 set -e
 
-DOMAIN="your-subdomain.duckdns.org"   # <-- CHANGE THIS (e.g. booksmart.duckdns.org)
-EMAIL="your-email@example.com"        # <-- CHANGE THIS (for Let's Encrypt)
-DB_ROOT_PASS="ChangeMe_Root123!"      # <-- CHANGE THIS
+DOMAIN="booksmartutt.duckdns.org"  
+EMAIL="0320127831@ut-tijuana.edu.mx"       
+DB_ROOT_PASS="pass"      
 DB_USER="booksmart_user"
-DB_PASS="ChangeMe_App456!"            # <-- CHANGE THIS
+DB_PASS="pass"           
 DB_NAME="booksmart"
 
 echo "=== 1. System update ==="
@@ -48,7 +48,6 @@ echo "=== 6. Clone / copy your project ==="
 # git clone https://github.com/your-user/booksmart_backend.git
 # cd booksmart_backend
 
-# Option B: if you already copied files via scp
 cd ~/booksmart_backend
 
 echo "=== 7. Create .env file ==="
