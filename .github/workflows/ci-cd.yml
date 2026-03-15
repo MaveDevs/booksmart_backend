@@ -55,9 +55,29 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Add host to known_hosts
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
+          if [ -z "$EC2_HOST" ]; then
+            echo "::error::Missing required secret: EC2_HOST"
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          ok=0
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              ok=1
+              break
+            fi
+            echo "ssh-keyscan attempt $attempt failed, retrying..."
+            sleep 5
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Cannot reach $EC2_HOST:22 from GitHub runner. Check EC2 Security Group inbound SSH rules and host value."
+            exit 1
+          fi
 
       - name: Sync project to EC2
         env:
