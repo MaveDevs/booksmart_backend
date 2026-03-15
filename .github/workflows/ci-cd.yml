@@ -142,9 +142,28 @@ jobs:
           set -e
           cd "$APP_DIR"
 
+          FALLBACK_APP_DIR="/home/${USER}/booksmart_backend"
+          if [ ! -f .env ] && [ "$APP_DIR" != "$FALLBACK_APP_DIR" ] && [ -f "$FALLBACK_APP_DIR/.env" ]; then
+            echo "Configured APP_DIR has no .env, falling back to $FALLBACK_APP_DIR"
+            APP_DIR="$FALLBACK_APP_DIR"
+            cd "$APP_DIR"
+          fi
+
           if [ ! -f .env ]; then
-            echo "ERROR: .env not found in $APP_DIR"
+            echo "::error:: .env not found in $APP_DIR"
+            pwd
+            ls -la
             exit 1
+          fi
+
+          if [ ! -f "$COMPOSE_FILE" ]; then
+            if [ -f "docker-compose.yml" ]; then
+              COMPOSE_FILE="docker-compose.yml"
+            else
+              echo "::error:: Compose file not found: $COMPOSE_FILE"
+              ls -la
+              exit 1
+            fi
           fi
 
           upsert_env() {
