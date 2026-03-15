@@ -166,6 +166,35 @@ jobs:
           fi
 
           sudo docker compose -f "$COMPOSE_FILE" up -d --build
-          sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head
+
+          # Wait until api container is running before migrations
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            API_CID=$(sudo docker compose -f "$COMPOSE_FILE" ps -q api)
+            if [ -n "$API_CID" ]; then
+              API_STATUS=$(sudo docker inspect --format='{{.State.Status}}' "$API_CID")
+              echo "api status (attempt $attempt): $API_STATUS"
+              if [ "$API_STATUS" = "running" ]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          migrate_ok=0
+          for attempt in 1 2 3; do
+            if sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head; then
+              migrate_ok=1
+              break
+            fi
+            echo "alembic retry $attempt failed, retrying..."
+            sleep 5
+          done
+
+          if [ "$migrate_ok" -ne 1 ]; then
+            echo "::error::Migration failed after retries"
+            sudo docker compose -f "$COMPOSE_FILE" logs --tail=200 api || true
+            exit 1
+          fi
+
           sudo docker compose -f "$COMPOSE_FILE" ps
           EOF
