@@ -102,13 +102,23 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$EC2_USERNAME" ]; then
+            echo "::error::Missing required secret: EC2_USERNAME"
+            exit 1
+          fi
+
           APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
+
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "echo ssh-ok"
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "command -v rsync >/dev/null || (sudo apt-get update -y && sudo apt-get install -y rsync)"
+
           rsync -az --delete \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude '.venv/' \
             --exclude '__pycache__/' \
             --exclude '.env' \
+            --rsync-path="mkdir -p '${APP_DIR}' && rsync" \
             ./ "${EC2_USERNAME}@${EC2_HOST_CLEAN}:${APP_DIR}/"
 
       - name: Deploy services
