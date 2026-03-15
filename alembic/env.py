@@ -48,17 +48,14 @@ def _seed_default_roles(connection) -> None:
 	if not table_name:
 		return
 
-	# Idempotent seed: insert if missing, update if present.
+	# Idempotent seed: insert only if the row doesn't exist yet.
 	connection.execute(
 		text(
 			f"""
-			INSERT INTO `{table_name}` (`rol_id`, `nombre`, `descripcion`) VALUES
+			INSERT IGNORE INTO `{table_name}` (`rol_id`, `nombre`, `descripcion`) VALUES
 				(1, 'CLIENTE', 'Usuario final que reserva citas'),
 				(2, 'Dueño', 'Dueño de establecimiento'),
 				(3, 'Admin', 'Administrador del sistema')
-			ON DUPLICATE KEY UPDATE
-				`nombre` = VALUES(`nombre`),
-				`descripcion` = VALUES(`descripcion`)
 			"""
 		)
 	)
