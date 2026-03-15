@@ -35,9 +35,9 @@ jobs:
 
       - name: Basic smoke scripts
         run: |
-          python TESTMIKE/model_check.py
-          python TESTMIKE/auth_smoke.py
-          python TESTMIKE/backup_check.py
+          python -m TESTMIKE.model_check
+          python -m TESTMIKE.auth_smoke
+          python -m TESTMIKE.backup_check
 
   deploy:
     name: Deploy to EC2
