@@ -1,0 +1,120 @@
+name: CI-CD
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: Lint & Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile check
+        run: python -m compileall app
+
+      - name: Basic smoke scripts
+        run: |
+          python TESTMIKE/model_check.py
+          python TESTMIKE/auth_smoke.py
+          python TESTMIKE/backup_check.py
+
+  deploy:
+    name: Deploy to EC2
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync project to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
+        run: |
+          APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.venv/' \
+            --exclude '__pycache__/' \
+            --exclude '.env' \
+            ./ "${EC2_USERNAME}@${EC2_HOST}:${APP_DIR}/"
+
+      - name: Deploy services
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
+          COMPOSE_FILE: ${{ vars.COMPOSE_FILE }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
+          COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+
+          ssh "${EC2_USERNAME}@${EC2_HOST}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
+          set -e
+          cd "$APP_DIR"
+
+          if [ ! -f .env ]; then
+            echo "ERROR: .env not found in $APP_DIR"
+            exit 1
+          fi
+
+          upsert_env() {
+            key="$1"
+            value="$2"
+            if grep -q "^${key}=" .env; then
+              awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k {$0=k"="v} {print}' .env > .env.tmp && mv .env.tmp .env
+            else
+              printf "%s=%s\n" "$key" "$value" >> .env
+            fi
+          }
+
+          upsert_env "SENTRY_RELEASE" "$GIT_SHA"
+          if [ -n "$SENTRY_DSN" ]; then
+            upsert_env "SENTRY_DSN" "$SENTRY_DSN"
+          fi
+          if [ -n "$SENTRY_ENVIRONMENT" ]; then
+            upsert_env "SENTRY_ENVIRONMENT" "$SENTRY_ENVIRONMENT"
+          fi
+
+          sudo docker compose -f "$COMPOSE_FILE" up -d --build
+          sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head
+          sudo docker compose -f "$COMPOSE_FILE" ps
+          EOF

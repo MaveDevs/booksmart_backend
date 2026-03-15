@@ -69,6 +69,12 @@ if [ ! -f .env ]; then
     cat > .env <<ENVEOF
 DATABASE_URL=mysql+pymysql://${DB_USER}:${DB_PASS}@host.docker.internal:3306/${DB_NAME}
 SECRET_KEY=$(openssl rand -hex 32)
+# Optional Sentry configuration
+# SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+# SENTRY_ENVIRONMENT=production
+# SENTRY_TRACES_SAMPLE_RATE=0.0
+# SENTRY_PROFILES_SAMPLE_RATE=0.0
+# SENTRY_SEND_DEFAULT_PII=false
 ENVEOF
     echo "   .env created — review it with: nano .env"
 fi

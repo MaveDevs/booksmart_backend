@@ -34,6 +34,7 @@ React Example:
 
 import json
 import logging
+import os
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
@@ -60,6 +61,12 @@ def _authenticate_ws_token(token: str) -> int | None:
     Validate a JWT token and return the user_id, or None if invalid.
     """
     try:
+        if os.getenv("JWT_AUTH_DISABLED", "false").lower() == "true":
+            return int(os.getenv("JWT_BYPASS_USER_ID", "1"))
+
+        if not token:
+            return None
+
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         subject = payload.get("sub")
         if subject is None:
@@ -69,10 +76,14 @@ def _authenticate_ws_token(token: str) -> int | None:
         return None
 
 
+def _is_jwt_auth_disabled() -> bool:
+    return os.getenv("JWT_AUTH_DISABLED", "false").lower() == "true"
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str | None = Query(None),
 ):
     """
     Main WebSocket endpoint.
@@ -84,15 +95,16 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    # Verify user exists and is active
-    db = _get_db()
-    try:
-        user = crud_users.get_user(db, user_id=user_id)
-        if not user or not bool(user.activo):
-            await websocket.close(code=4001, reason="User not found or inactive")
-            return
-    finally:
-        db.close()
+    if not _is_jwt_auth_disabled():
+        # Verify user exists and is active
+        db = _get_db()
+        try:
+            user = crud_users.get_user(db, user_id=user_id)
+            if not user or not bool(user.activo):
+                await websocket.close(code=4001, reason="User not found or inactive")
+                return
+        finally:
+            db.close()
 
     # ── Connect ─────────────────────────────────────────────────────────
     await manager.connect(websocket, user_id)

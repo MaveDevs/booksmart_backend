@@ -35,6 +35,14 @@ def get_user_role_name(user: User) -> Optional[str]:
     """Get the role name of a user (lowercase for comparison)."""
     if user.role:
         return user.role.nombre.lower()
+
+    if user.rol_id == 1:
+        return RoleType.CLIENTE.value
+    if user.rol_id == 2:
+        return RoleType.DUENO.value
+    if user.rol_id == 3:
+        return RoleType.ADMIN.value
+
     return None
 
 
