@@ -56,12 +56,25 @@ jobs:
 
       - name: Add host to known_hosts
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_HOST_RAW: ${{ secrets.EC2_HOST }}
         run: |
-          if [ -z "$EC2_HOST" ]; then
+          if [ -z "$EC2_HOST_RAW" ]; then
             echo "::error::Missing required secret: EC2_HOST"
             exit 1
           fi
+
+          EC2_HOST="$EC2_HOST_RAW"
+          EC2_HOST="${EC2_HOST#http://}"
+          EC2_HOST="${EC2_HOST#https://}"
+          EC2_HOST="${EC2_HOST%%/*}"
+          EC2_HOST="$(echo "$EC2_HOST" | xargs)"
+
+          if [ -z "$EC2_HOST" ]; then
+            echo "::error::EC2_HOST value is invalid after normalization"
+            exit 1
+          fi
+
+          echo "EC2_HOST_CLEAN=$EC2_HOST" >> "$GITHUB_ENV"
 
           mkdir -p ~/.ssh
           ok=0
@@ -81,10 +94,14 @@ jobs:
 
       - name: Sync project to EC2
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
           EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
         run: |
+          if [ -z "$EC2_HOST_CLEAN" ]; then
+            echo "::error::EC2_HOST_CLEAN is missing"
+            exit 1
+          fi
+
           APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
           rsync -az --delete \
             --exclude '.git/' \
@@ -92,11 +109,10 @@ jobs:
             --exclude '.venv/' \
             --exclude '__pycache__/' \
             --exclude '.env' \
-            ./ "${EC2_USERNAME}@${EC2_HOST}:${APP_DIR}/"
+            ./ "${EC2_USERNAME}@${EC2_HOST_CLEAN}:${APP_DIR}/"
 
       - name: Deploy services
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
           EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
           COMPOSE_FILE: ${{ vars.COMPOSE_FILE }}
@@ -104,10 +120,15 @@ jobs:
           SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
           GIT_SHA: ${{ github.sha }}
         run: |
+          if [ -z "$EC2_HOST_CLEAN" ]; then
+            echo "::error::EC2_HOST_CLEAN is missing"
+            exit 1
+          fi
+
           APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
           COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 
-          ssh "${EC2_USERNAME}@${EC2_HOST}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
+          ssh "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
           set -e
           cd "$APP_DIR"
 
