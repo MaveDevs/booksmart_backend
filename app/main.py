@@ -3,6 +3,9 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
+from app.core.monitoring import init_sentry
+
+init_sentry()
 
 app = FastAPI(title="backend")
 
