@@ -1,64 +1,111 @@
-# booksmart_backend
-Backend for our project
+# Booksmart Backend
 
-# install venv
+Backend API built with FastAPI + SQLAlchemy + Alembic + MySQL.
+
+## Requirements
+
+- Python 3.10+
+- MySQL 8+
+
+## Local setup
+
+1) Create and activate virtual environment
+
+Linux/macOS:
+
+```bash
 python -m venv .venv
+source .venv/bin/activate
+```
 
-# activate venv(windows command)
-.\.venv\Scripts\activate
+Windows (PowerShell):
 
-# to install requirements: 
-pip install -r requirements.txt 
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
-# change the .env and alambic.ini files to the credentials of your own mysql db (db has to be created before you run the migrations from bellow)
+2) Install dependencies
 
-# optional Sentry variables for error monitoring
-# SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
-# SENTRY_ENVIRONMENT=development
-# SENTRY_TRACES_SAMPLE_RATE=0.0
-# SENTRY_PROFILES_SAMPLE_RATE=0.0
-# SENTRY_SEND_DEFAULT_PII=false
+```bash
+pip install -r requirements.txt
+```
 
-# to get the db populated(terminal with venv activated):
-alembic revision --autogenerate -m "Initial migration"
-alembic upgrade head
+3) Create local MySQL database and user
 
-# to run server:
-uvicorn app.main:app --reload
+```sql
+CREATE DATABASE IF NOT EXISTS booksmart CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'booksmart_user'@'localhost' IDENTIFIED BY 'booksmart_pass';
+GRANT ALL PRIVILEGES ON booksmart.* TO 'booksmart_user'@'localhost';
+FLUSH PRIVILEGES;
+```
 
-# api documents: 
-http://127.0.0.1:8000/docs#/
+4) Configure `.env`
 
-#to get access first login with endpoint auth>login>access-token and then input the given token in authorize 
+Use at least:
 
-How clients connect
-wss://your-domain.com/api/v1/ws?token=<JWT>
+```env
+DATABASE_URL=mysql+pymysql://booksmart_user:booksmart_pass@localhost:3306/booksmart
+SECRET_KEY=replace_with_a_secure_random_key
+```
 
-Flutter 
-final channel = WebSocketChannel.connect(
-  Uri.parse('wss://your-domain.com/api/v1/ws?token=$jwt'),
-);
-channel.stream.listen((event) {
-  final data = jsonDecode(event);
-  // data['type'] is "notification", "message", "appointment", etc.
-});
+Optional Sentry variables:
 
-React
-const ws = new WebSocket(`wss://your-domain.com/api/v1/ws?token=${jwt}`);
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if (data.type === 'notification') { /* update UI */ }
-};
+```env
+SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+SENTRY_ENVIRONMENT=development
+SENTRY_RELEASE=booksmart@0.1.0
+SENTRY_TRACES_SAMPLE_RATE=0.0
+SENTRY_PROFILES_SAMPLE_RATE=0.0
+SENTRY_SEND_DEFAULT_PII=false
+```
 
-Python client
-import websockets, asyncio
-async def listen():
-    async with websockets.connect(f"wss://your-domain.com/api/v1/ws?token={jwt}") as ws:
-        async for msg in ws:
-            print(msg)
+If `SENTRY_DSN` is not set, Sentry stays disabled.
 
-Sentry
-- Install dependencies with `pip install -r requirements.txt`.
-- Add `SENTRY_DSN` to your runtime environment or `.env`.
-- Optional variables: `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILES_SAMPLE_RATE`, `SENTRY_SEND_DEFAULT_PII`.
-- If `SENTRY_DSN` is missing, Sentry stays disabled.
+## Run database migrations
+
+```bash
+.venv/bin/python -m alembic upgrade head
+```
+
+## Run API
+
+```bash
+.venv/bin/uvicorn app.main:app --reload
+```
+
+- API root: `http://127.0.0.1:8000/`
+- Swagger docs: `http://127.0.0.1:8000/docs`
+
+## Authentication modes
+
+### Normal mode (default)
+
+- Use `/api/v1/auth/login/access-token` to get a JWT.
+- Send `Authorization: Bearer <token>` on protected endpoints.
+- WebSocket auth: `wss://your-domain.com/api/v1/ws?token=<JWT>`
+
+### Local test mode (disable JWT checks)
+
+For local DB/testing only:
+
+```env
+JWT_AUTH_DISABLED=true
+JWT_BYPASS_USER_ID=1
+JWT_BYPASS_ROLE_ID=3
+JWT_BYPASS_NAME=Bypass
+JWT_BYPASS_LASTNAME=User
+JWT_BYPASS_EMAIL=bypass@booksmart.com
+```
+
+Notes:
+
+- In this mode, HTTP endpoints that require authentication use a synthetic local user.
+- WebSocket token validation is bypassed.
+- Do not use this mode in production.
+
+## WebSocket endpoint
+
+- Endpoint: `/api/v1/ws`
+- Normal mode: pass token as query param.
+- Test mode (`JWT_AUTH_DISABLED=true`): token is optional.
