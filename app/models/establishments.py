@@ -20,6 +20,7 @@ class Establishment(Base):
     services = relationship("Service", back_populates="establishment")
     profile = relationship("Profile", back_populates="establishment", uselist=False)
     subscriptions = relationship("Subscription", back_populates="establishment")
+    workers = relationship("Worker", back_populates="establishment")
 
     agendas = relationship("Agenda", back_populates="establishment")
     reviews = relationship("Review", back_populates="establishment")

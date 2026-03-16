@@ -9,12 +9,24 @@ from app.api.v1.endpoints import (
 	payments,
 	plans,
 	profiles,
-        push_subscriptions,
+	push_subscriptions,
+	ratings,
+	reports,
+	rol,
+	services,
+	subscriptions,
+	users,
+	workers,
+	ws,
+)
+
+api_router = APIRouter()
 
 api_router.include_router(login.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(establishments.router, prefix="/establishments", tags=["establishments"])
 api_router.include_router(services.router, prefix="/services", tags=["services"])
+api_router.include_router(workers.router, prefix="/workers", tags=["workers"])
 api_router.include_router(agendas.router, prefix="/agendas", tags=["agendas"])
 api_router.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])

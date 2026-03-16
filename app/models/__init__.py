@@ -9,6 +9,7 @@ from .services import Service
 from .agendas import Agenda
 from .appointments import Appointment
 from .messages import Message
+from .workers import Worker
 
 from .notifications import Notification
 from .reports import Report
