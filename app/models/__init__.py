@@ -16,3 +16,4 @@ from .reports import Report
 from .plans import Plan
 from .subscriptions import Subscription
 from .payments import Payment
+from .push_subscriptions import PushSubscription

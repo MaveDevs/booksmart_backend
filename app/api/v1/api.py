@@ -9,16 +9,7 @@ from app.api.v1.endpoints import (
 	payments,
 	plans,
 	profiles,
-	ratings,
-	reports,
-	rol,
-	services,
-	subscriptions,
-	users,
-	ws,
-)
-
-api_router = APIRouter()
+        push_subscriptions,
 
 api_router.include_router(login.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
@@ -35,6 +26,7 @@ api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(rol.router, prefix="/roles", tags=["roles"])
+api_router.include_router(push_subscriptions.router, prefix="/push-subscriptions", tags=["push-subscriptions"])
 
 # WebSocket route (no prefix — it's already /ws inside the router)
 api_router.include_router(ws.router, tags=["websocket"])
