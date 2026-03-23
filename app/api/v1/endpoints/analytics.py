@@ -18,6 +18,7 @@ from app.api import deps
 from app.crud import crud_analytics, crud_establishments
 from app.models import User
 from app.core.permissions import RoleType, get_user_role_name, require_owner_or_admin
+from app.services.analytics_calculator import recalculate_daily_occupancy
 from app.schemas.analytics import (
     OccupancyAnalyticsResponse,
     SuggestionPromocionResponse,
@@ -26,6 +27,46 @@ from app.schemas.analytics import (
 )
 
 router = APIRouter()
+
+
+@router.post("/occupancy/recalculate/{establecimiento_id}")
+def recalculate_occupancy_metrics(
+    establecimiento_id: int,
+    fecha: Optional[date] = Query(None),
+    idle_threshold_percent: float = Query(50.0),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_owner_or_admin()),
+):
+    """
+    Recalculate occupancy analytics for one day.
+    - Owners can recalculate only their own establishments
+    - Admins can recalculate all
+    """
+    user_role = get_user_role_name(current_user)
+
+    establishment = crud_establishments.get_establishment(db, establecimiento_id)
+    if not establishment:
+        raise HTTPException(status_code=404, detail="Establishment not found")
+
+    if user_role == RoleType.DUENO.value and establishment.usuario_id != current_user.usuario_id:
+        raise HTTPException(status_code=403, detail="You don't own this establishment")
+
+    if not fecha:
+        fecha = date.today()
+
+    result = recalculate_daily_occupancy(
+        db,
+        establecimiento_id=establecimiento_id,
+        target_date=fecha,
+        idle_threshold_percent=idle_threshold_percent,
+    )
+
+    return {
+        "establecimiento_id": establecimiento_id,
+        "fecha": fecha,
+        "idle_threshold_percent": idle_threshold_percent,
+        **result,
+    }
 
 
 # ── Occupancy Metrics ────────────────────────────────────────────────────────
