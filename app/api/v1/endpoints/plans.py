@@ -85,3 +85,23 @@ def delete_plan(
     if not success:
         raise HTTPException(status_code=404, detail="Plan not found")
     return {"message": "Plan deleted successfully"}
+
+
+@router.post("/initialize/defaults")
+def initialize_default_plans(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_admin()),
+):
+    """
+    Admin only: Initialize default FREE and PREMIUM plans with their features.
+    
+    Idempotent - if plans already exist, returns their IDs without duplicating.
+    
+    Response:
+    - created: whether new plans were created
+    - free_plan_id: ID of FREE plan
+    - premium_plan_id: ID of PREMIUM plan
+    """
+    result = crud_plans.initialize_default_plans(db)
+    return result
+

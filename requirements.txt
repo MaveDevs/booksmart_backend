@@ -17,3 +17,4 @@ python-dotenv>=1.0.0
 gunicorn>=21.2.0
 pywebpush>=2.0.0
 sentry-sdk[fastapi]>=2.22.0
+pytest>=8.0.0

@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Appointment, Message, User
+from app.models import Appointment, Message, Service, User
 from app.schemas.messages import MessageCreate, MessageUpdate
 
 
@@ -26,6 +26,8 @@ def get_messages(
 
 
 def create_message(db: Session, message: MessageCreate) -> Message:
+    from app.services.notification_orchestrator import orchestrator
+
     # Verify cita_id exists
     appointment = db.query(Appointment).filter(Appointment.cita_id == message.cita_id).first()
     if not appointment:
@@ -41,6 +43,13 @@ def create_message(db: Session, message: MessageCreate) -> Message:
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
+
+    service = db.query(Service).filter(Service.servicio_id == appointment.servicio_id).first()
+    if service:
+        orchestrator.on_message_received_sync(
+            db, db_message.mensaje_id, service.establecimiento_id
+        )
+
     return db_message
 
 
