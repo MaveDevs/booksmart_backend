@@ -109,3 +109,4 @@ Notes:
 - Endpoint: `/api/v1/ws`
 - Normal mode: pass token as query param.
 - Test mode (`JWT_AUTH_DISABLED=true`): token is optional.# Deploy test
+# Deployment fixed
