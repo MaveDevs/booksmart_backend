@@ -41,6 +41,13 @@ def create_appointment(db: Session, appointment: AppointmentCreate) -> Appointme
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
+
+    from app.services.notification_orchestrator import orchestrator
+
+    orchestrator.on_appointment_created_sync(
+        db, db_appointment.cita_id, service.establecimiento_id
+    )
+
     return db_appointment
 
 
@@ -49,9 +56,13 @@ def update_appointment(
     appointment_id: int,
     appointment: AppointmentUpdate,
 ) -> Optional[Appointment]:
+    from app.services.notification_orchestrator import orchestrator
+
     db_appointment = get_appointment(db, appointment_id)
     if not db_appointment:
         return None
+
+    previous_status = db_appointment.estado
 
     update_data = appointment.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -59,6 +70,28 @@ def update_appointment(
 
     db.commit()
     db.refresh(db_appointment)
+
+    service = db.query(Service).filter(Service.servicio_id == db_appointment.servicio_id).first()
+    if not service:
+        return db_appointment
+
+    new_status = db_appointment.estado
+    if new_status == previous_status:
+        return db_appointment
+
+    if new_status.value == "CONFIRMADA":
+        orchestrator.on_appointment_confirmed_sync(
+            db, db_appointment.cita_id, service.establecimiento_id
+        )
+    elif new_status.value == "CANCELADA":
+        orchestrator.on_appointment_cancelled_sync(
+            db, db_appointment.cita_id, service.establecimiento_id
+        )
+    elif new_status.value == "COMPLETADA":
+        orchestrator.on_appointment_completed_sync(
+            db, db_appointment.cita_id, service.establecimiento_id
+        )
+
     return db_appointment
 
 
