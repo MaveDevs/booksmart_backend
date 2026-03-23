@@ -9,12 +9,14 @@ from app.api.v1.endpoints import (
 	payments,
 	plans,
 	profiles,
+	push_subscriptions,
 	ratings,
 	reports,
 	rol,
 	services,
 	subscriptions,
 	users,
+	workers,
 	ws,
 )
 
@@ -24,6 +26,7 @@ api_router.include_router(login.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(establishments.router, prefix="/establishments", tags=["establishments"])
 api_router.include_router(services.router, prefix="/services", tags=["services"])
+api_router.include_router(workers.router, prefix="/workers", tags=["workers"])
 api_router.include_router(agendas.router, prefix="/agendas", tags=["agendas"])
 api_router.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
@@ -35,6 +38,7 @@ api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(rol.router, prefix="/roles", tags=["roles"])
+api_router.include_router(push_subscriptions.router, prefix="/push-subscriptions", tags=["push-subscriptions"])
 
 # WebSocket route (no prefix — it's already /ws inside the router)
 api_router.include_router(ws.router, tags=["websocket"])

@@ -21,3 +21,4 @@ class User(Base):
     reviews = relationship("Review", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
     sent_messages = relationship("Message", foreign_keys="Message.emisor_id", back_populates="sender")
+    push_subscriptions = relationship("PushSubscription", back_populates="user")
