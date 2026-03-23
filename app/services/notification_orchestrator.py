@@ -1,0 +1,316 @@
+"""
+Notification Orchestrator - Centralized logic for triggering automatic notifications
+
+This module listens to business events (appointment created, message sent, etc.)
+and automatically creates AutoNotification records based on the establishment's
+feature entitlements.
+
+Usage example:
+    from app.services.notification_orchestrator import orchestrator
+    
+    # When appointment is created:
+    await orchestrator.on_appointment_created(db, appointment_id, establishment_id)
+"""
+
+import asyncio
+from datetime import datetime, timedelta
+from typing import Optional
+
+from sqlalchemy.orm import Session
+
+from app.crud.crud_auto_notifications import create_auto_notification
+from app.crud.crud_appointments import get_appointment
+from app.crud.crud_messages import get_message
+from app.core.feature_gating import establishment_has_feature
+from app.models.auto_notifications import (
+    AutoNotificationType,
+    NotificationChannel,
+)
+from app.models.plan_features import FeatureKey
+from app.schemas.auto_notifications import AutoNotificationCreate
+
+
+class NotificationOrchestrator:
+    """
+    Orchestrates automatic notification creation based on business events.
+    All methods are safe to call even if features are not enabled (they will no-op).
+    """
+
+    async def on_appointment_created(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """
+        Called when a new appointment is created.
+        Schedules reminder notifications if AUTO_REMINDERS feature is enabled.
+        """
+        has_reminders = establishment_has_feature(db, establishment_id, FeatureKey.AUTO_REMINDERS)
+        if not has_reminders:
+            return
+
+        appointment = get_appointment(db, appointment_id)
+        if not appointment:
+            return
+
+        # Schedule reminders: T-24h and T-2h before appointment
+        appointment_datetime = datetime.combine(appointment.fecha, appointment.hora_inicio)
+
+        # 24-hour reminder
+        reminder_24h = appointment_datetime - timedelta(hours=24)
+        if reminder_24h > datetime.utcnow():
+            notif_24h = AutoNotificationCreate(
+                usuario_id=appointment.cliente_id,
+                cita_id=appointment_id,
+                establecimiento_id=establishment_id,
+                tipo=AutoNotificationType.APPOINTMENT_REMINDER,
+                canal=NotificationChannel.PUSH,
+                titulo="Recordatorio: Tu cita es mañana",
+                mensaje=f"Tu cita está programada para mañana a las {appointment.hora_inicio.strftime('%H:%M')}",
+                fecha_programada=reminder_24h,
+                url_accion="/app/appointments",
+            )
+            create_auto_notification(db, notif_24h)
+
+        # 2-hour reminder
+        reminder_2h = appointment_datetime - timedelta(hours=2)
+        if reminder_2h > datetime.utcnow():
+            notif_2h = AutoNotificationCreate(
+                usuario_id=appointment.cliente_id,
+                cita_id=appointment_id,
+                establecimiento_id=establishment_id,
+                tipo=AutoNotificationType.APPOINTMENT_REMINDER,
+                canal=NotificationChannel.PUSH,
+                titulo="Recordatorio: Tu cita es en 2 horas",
+                mensaje=f"Tu cita comienza a las {appointment.hora_inicio.strftime('%H:%M')}",
+                fecha_programada=reminder_2h,
+                url_accion="/app/appointments",
+            )
+            create_auto_notification(db, notif_2h)
+
+    async def on_appointment_confirmed(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """
+        Called when an appointment is confirmed by owner.
+        Creates confirmation notification.
+        """
+        appointment = get_appointment(db, appointment_id)
+        if not appointment:
+            return
+
+        # Immediate in-app notification
+        notif = AutoNotificationCreate(
+            usuario_id=appointment.cliente_id,
+            cita_id=appointment_id,
+            establecimiento_id=establishment_id,
+            tipo=AutoNotificationType.APPOINTMENT_CONFIRMATION,
+            canal=NotificationChannel.IN_APP,
+            titulo="Tu cita ha sido confirmada",
+            mensaje="El negocio ha confirmado tu cita. ¡Gracias por tu reserva!",
+            fecha_programada=datetime.utcnow(),
+            url_accion="/app/appointments",
+        )
+        create_auto_notification(db, notif)
+
+    async def on_appointment_cancelled(
+        self, db: Session, appointment_id: int, establishment_id: int, reason: Optional[str] = None
+    ) -> None:
+        """
+        Called when an appointment is cancelled.
+        Notifies client and optionally suggests recovery offer if feature is enabled.
+        """
+        appointment = get_appointment(db, appointment_id)
+        if not appointment:
+            return
+
+        # Cancellation notification
+        notif = AutoNotificationCreate(
+            usuario_id=appointment.cliente_id,
+            cita_id=appointment_id,
+            establecimiento_id=establishment_id,
+            tipo=AutoNotificationType.APPOINTMENT_CANCELLATION,
+            canal=NotificationChannel.IN_APP,
+            titulo="Tu cita ha sido cancelada",
+            mensaje=reason or "Tu cita ha sido cancelada. Contáctanos si tienes preguntas.",
+            fecha_programada=datetime.utcnow(),
+        )
+        create_auto_notification(db, notif)
+
+        # Recovery offer if feature enabled
+        has_recovery = establishment_has_feature(db, establishment_id, FeatureKey.AUTO_RECOVERY)
+        if has_recovery:
+            recovery_notif = AutoNotificationCreate(
+                usuario_id=appointment.cliente_id,
+                establecimiento_id=establishment_id,
+                tipo=AutoNotificationType.RECOVERY_OFFER,
+                canal=NotificationChannel.PUSH,
+                titulo="¡Te extrañamos! Obtén un descuento",
+                mensaje="Reserva tu próxima cita y obtén 20% de descuento como disculpa.",
+                fecha_programada=datetime.utcnow() + timedelta(minutes=5),
+                url_accion="/app/appointments",
+            )
+            create_auto_notification(db, recovery_notif)
+
+    async def on_appointment_completed(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """
+        Called when an appointment is marked as completed.
+        Triggers review request if feature is enabled.
+        """
+        has_review_prompt = establishment_has_feature(
+            db, establishment_id, FeatureKey.AUTO_RESEÑA_PROMPT
+        )
+        if not has_review_prompt:
+            return
+
+        appointment = get_appointment(db, appointment_id)
+        if not appointment:
+            return
+
+        # Schedule review request 1 hour after appointment
+        review_request = AutoNotificationCreate(
+            usuario_id=appointment.cliente_id,
+            cita_id=appointment_id,
+            establecimiento_id=establishment_id,
+            tipo=AutoNotificationType.REVIEW_REQUEST,
+            canal=NotificationChannel.IN_APP,
+            titulo="¿Cómo fue tu experiencia?",
+            mensaje="Tu cita ha terminado. ¡Cuéntanos cómo fue!",
+            fecha_programada=datetime.utcnow() + timedelta(hours=1),
+            url_accion="/app/ratings",
+        )
+        create_auto_notification(db, review_request)
+
+    async def on_message_received(
+        self, db: Session, message_id: int, establishment_id: int
+    ) -> None:
+        """
+        Called when a new message is received in a conversation.
+        Creates notification for the recipient.
+        """
+        message = get_message(db, message_id)
+        if not message or not message.appointment:
+            return
+
+        # Determine recipient (opposite of sender)
+        appointment = message.appointment
+        recipient_id = (
+            appointment.cliente_id
+            if message.emisor_id != appointment.cliente_id
+            else message.emisor_id
+        )
+
+        notif = AutoNotificationCreate(
+            usuario_id=recipient_id,
+            mensaje_id=message_id,
+            cita_id=appointment.cita_id,
+            establecimiento_id=establishment_id,
+            tipo=AutoNotificationType.MESSAGE_RECEIVED,
+            canal=NotificationChannel.PUSH,
+            titulo="Nuevo mensaje",
+            mensaje=f"Tienes un nuevo mensaje: {message.contenido[:100]}...",
+            fecha_programada=datetime.utcnow(),
+            url_accion=f"/app/appointments/{appointment.cita_id}",
+        )
+        create_auto_notification(db, notif)
+
+    def on_appointment_created_sync(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """
+        Synchronous version of on_appointment_created.
+        Use this from sync CRUD contexts.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context, schedule as task
+                asyncio.create_task(
+                    self.on_appointment_created(db, appointment_id, establishment_id)
+                )
+            else:
+                loop.run_until_complete(
+                    self.on_appointment_created(db, appointment_id, establishment_id)
+                )
+        except Exception as e:
+            # Log and continue - notifications are non-critical
+            import logging
+            logging.error(f"Notification orchestration failed: {e}")
+
+    def on_appointment_confirmed_sync(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """Synchronous version of on_appointment_confirmed"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(
+                    self.on_appointment_confirmed(db, appointment_id, establishment_id)
+                )
+            else:
+                loop.run_until_complete(
+                    self.on_appointment_confirmed(db, appointment_id, establishment_id)
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Notification orchestration failed: {e}")
+
+    def on_appointment_cancelled_sync(
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Synchronous version of on_appointment_cancelled"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(
+                    self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
+                )
+            else:
+                loop.run_until_complete(
+                    self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Notification orchestration failed: {e}")
+
+    def on_appointment_completed_sync(
+        self, db: Session, appointment_id: int, establishment_id: int
+    ) -> None:
+        """Synchronous version of on_appointment_completed"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(
+                    self.on_appointment_completed(db, appointment_id, establishment_id)
+                )
+            else:
+                loop.run_until_complete(
+                    self.on_appointment_completed(db, appointment_id, establishment_id)
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Notification orchestration failed: {e}")
+
+    def on_message_received_sync(
+        self, db: Session, message_id: int, establishment_id: int
+    ) -> None:
+        """Synchronous version of on_message_received"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.on_message_received(db, message_id, establishment_id))
+            else:
+                loop.run_until_complete(
+                    self.on_message_received(db, message_id, establishment_id)
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Notification orchestration failed: {e}")
+
+
+# Global orchestrator instance
+orchestrator = NotificationOrchestrator()

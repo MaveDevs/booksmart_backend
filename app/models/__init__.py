@@ -12,9 +12,12 @@ from .messages import Message
 from .workers import Worker
 
 from .notifications import Notification
+from .auto_notifications import AutoNotification, AutoNotificationType, NotificationChannel, AutoNotificationStatus
 from .reports import Report
+from .analytics import OccupancyAnalytics, SuggestionPromocion, DayOfWeek
 
 from .plans import Plan
+from .plan_features import PlanFeature, FeatureKey
 from .subscriptions import Subscription
 from .payments import Payment
 from .push_subscriptions import PushSubscription

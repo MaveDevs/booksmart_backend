@@ -15,4 +15,5 @@ class Plan(Base):
 	activo = Column(Boolean, default=True)
 
 	subscriptions = relationship("Subscription", back_populates="plan")
+	features = relationship("PlanFeature", back_populates="plan", cascade="all, delete-orphan")
 
