@@ -35,15 +35,42 @@ jobs:
 
       - name: Basic smoke scripts
         run: |
-          python TESTMIKE/model_check.py
-          python TESTMIKE/auth_smoke.py
-          python TESTMIKE/backup_check.py
+          python -m TESTMIKE.model_check
+          python -m TESTMIKE.auth_smoke
+          python -m TESTMIKE.backup_check
+
+  validation_tests:
+    name: Validation Tests (pytest)
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: mysql+pymysql://user:pass@localhost:3306/booksmart
+      SECRET_KEY: ci-test-secret
+      JWT_AUTH_DISABLED: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      - name: Run pytest validation suite
+        run: pytest -q tests
 
   deploy:
     name: Deploy to EC2
-    needs: ci
+    needs: [ci, validation_tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout
@@ -55,28 +82,74 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Add host to known_hosts
+        env:
+          EC2_HOST_RAW: ${{ secrets.EC2_HOST }}
         run: |
+          if [ -z "$EC2_HOST_RAW" ]; then
+            echo "::error::Missing required secret: EC2_HOST"
+            exit 1
+          fi
+
+          EC2_HOST="$EC2_HOST_RAW"
+          EC2_HOST="${EC2_HOST#http://}"
+          EC2_HOST="${EC2_HOST#https://}"
+          EC2_HOST="${EC2_HOST%%/*}"
+          EC2_HOST="$(echo "$EC2_HOST" | xargs)"
+
+          if [ -z "$EC2_HOST" ]; then
+            echo "::error::EC2_HOST value is invalid after normalization"
+            exit 1
+          fi
+
+          echo "EC2_HOST_CLEAN=$EC2_HOST" >> "$GITHUB_ENV"
+
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          ok=0
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              ok=1
+              break
+            fi
+            echo "ssh-keyscan attempt $attempt failed, retrying..."
+            sleep 5
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Cannot reach $EC2_HOST:22 from GitHub runner. Check EC2 Security Group inbound SSH rules and host value."
+            exit 1
+          fi
 
       - name: Sync project to EC2
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
           EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
         run: |
+          if [ -z "$EC2_HOST_CLEAN" ]; then
+            echo "::error::EC2_HOST_CLEAN is missing"
+            exit 1
+          fi
+
+          if [ -z "$EC2_USERNAME" ]; then
+            echo "::error::Missing required secret: EC2_USERNAME"
+            exit 1
+          fi
+
           APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
+
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "echo ssh-ok"
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "command -v rsync >/dev/null || (sudo apt-get update -y && sudo apt-get install -y rsync)"
+
           rsync -az --delete \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude '.venv/' \
             --exclude '__pycache__/' \
             --exclude '.env' \
-            ./ "${EC2_USERNAME}@${EC2_HOST}:${APP_DIR}/"
+            --rsync-path="mkdir -p '${APP_DIR}' && rsync" \
+            ./ "${EC2_USERNAME}@${EC2_HOST_CLEAN}:${APP_DIR}/"
 
       - name: Deploy services
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
           EC2_APP_DIR: ${{ vars.EC2_APP_DIR }}
           COMPOSE_FILE: ${{ vars.COMPOSE_FILE }}
@@ -84,16 +157,40 @@ jobs:
           SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
           GIT_SHA: ${{ github.sha }}
         run: |
+          if [ -z "$EC2_HOST_CLEAN" ]; then
+            echo "::error::EC2_HOST_CLEAN is missing"
+            exit 1
+          fi
+
           APP_DIR="${EC2_APP_DIR:-/home/${EC2_USERNAME}/booksmart_backend}"
           COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 
-          ssh "${EC2_USERNAME}@${EC2_HOST}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
+          ssh "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
           set -e
           cd "$APP_DIR"
 
+          FALLBACK_APP_DIR="/home/${USER}/booksmart_backend"
+          if [ ! -f .env ] && [ "$APP_DIR" != "$FALLBACK_APP_DIR" ] && [ -f "$FALLBACK_APP_DIR/.env" ]; then
+            echo "Configured APP_DIR has no .env, falling back to $FALLBACK_APP_DIR"
+            APP_DIR="$FALLBACK_APP_DIR"
+            cd "$APP_DIR"
+          fi
+
           if [ ! -f .env ]; then
-            echo "ERROR: .env not found in $APP_DIR"
+            echo "::error:: .env not found in $APP_DIR"
+            pwd
+            ls -la
             exit 1
+          fi
+
+          if [ ! -f "$COMPOSE_FILE" ]; then
+            if [ -f "docker-compose.yml" ]; then
+              COMPOSE_FILE="docker-compose.yml"
+            else
+              echo "::error:: Compose file not found: $COMPOSE_FILE"
+              ls -la
+              exit 1
+            fi
           fi
 
           upsert_env() {
@@ -115,6 +212,35 @@ jobs:
           fi
 
           sudo docker compose -f "$COMPOSE_FILE" up -d --build
-          sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head
+
+          # Wait until api container is running before migrations
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            API_CID=$(sudo docker compose -f "$COMPOSE_FILE" ps -q api)
+            if [ -n "$API_CID" ]; then
+              API_STATUS=$(sudo docker inspect --format='{{.State.Status}}' "$API_CID")
+              echo "api status (attempt $attempt): $API_STATUS"
+              if [ "$API_STATUS" = "running" ]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          migrate_ok=0
+          for attempt in 1 2 3; do
+            if sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head; then
+              migrate_ok=1
+              break
+            fi
+            echo "alembic retry $attempt failed, retrying..."
+            sleep 5
+          done
+
+          if [ "$migrate_ok" -ne 1 ]; then
+            echo "::error::Migration failed after retries"
+            sudo docker compose -f "$COMPOSE_FILE" logs --tail=200 api || true
+            exit 1
+          fi
+
           sudo docker compose -f "$COMPOSE_FILE" ps
           EOF
