@@ -62,7 +62,8 @@ htmlcov/
 dmypy.json
 
 # Alembic 
-alembic/versions/
+# alembic/versions/  # Removed: we're now tracking migrations in git for team synchronization
+alembic/versions/__pycache__/
 
 # Jupyter Notebooks 
 .ipynb_checkpoints/
