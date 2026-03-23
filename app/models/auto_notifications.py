@@ -78,7 +78,7 @@ class AutoNotification(Base):
     
     # Metadata
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())
-    metadata = Column(String(1000), nullable=True)  # JSON string with additional data
+    metadata_json = Column(String(1000), nullable=True)  # JSON string with additional data
 
     # Relationships (optional, for convenience)
     user = relationship("User", foreign_keys=[usuario_id])
