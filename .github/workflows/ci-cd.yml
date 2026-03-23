@@ -70,7 +70,7 @@ jobs:
     name: Deploy to EC2
     needs: [ci, validation_tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout
