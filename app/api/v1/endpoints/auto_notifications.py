@@ -17,6 +17,7 @@ from app.models import User
 from app.models.auto_notifications import AutoNotificationStatus
 from app.schemas.auto_notifications import AutoNotificationCreate, AutoNotificationResponse, AutoNotificationUpdate
 from app.core.permissions import RoleType, get_user_role_name, require_admin, require_owner_or_admin
+from app.tasks.notification_worker import process_pending_notifications_once
 
 router = APIRouter()
 
@@ -158,3 +159,15 @@ def get_pending_notifications(
     """
     notifications = crud_auto_notifications.get_pending_notifications(db, limit=limit)
     return [AutoNotificationResponse.from_orm(n) for n in notifications]
+
+
+@router.post("/pending/process-now")
+async def process_pending_notifications_now(
+    limit: int = 200,
+    _: User = Depends(require_admin()),
+):
+    """
+    Admin: Process pending notifications immediately.
+    Useful for manual runs or smoke checks without waiting for worker schedule.
+    """
+    return await process_pending_notifications_once(limit=limit)

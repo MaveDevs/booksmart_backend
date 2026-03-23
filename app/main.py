@@ -1,13 +1,17 @@
 from dotenv import load_dotenv
 load_dotenv()
+import asyncio
 import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from app.api.v1.api import api_router
 from app.core.monitoring import init_sentry
+from app.tasks.notification_worker import run_notification_worker
 
 init_sentry()
+logger = logging.getLogger(__name__)
 
 def _is_jwt_auth_disabled() -> bool:
     return os.getenv("JWT_AUTH_DISABLED", "false").lower() == "true"
@@ -20,6 +24,10 @@ def _build_api_description() -> str:
         f"Current auth mode: JWT {mode}.\n"
         "Set JWT_AUTH_DISABLED=true only for local testing."
     )
+
+
+def _is_notification_worker_enabled() -> bool:
+    return os.getenv("NOTIFICATION_WORKER_ENABLED", "false").lower() == "true"
 
 
 app = FastAPI(
@@ -78,6 +86,45 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"message": "Welcome to backend", "status": "active"}
+
+
+@app.on_event("startup")
+async def startup_notification_worker() -> None:
+    if not _is_notification_worker_enabled():
+        return
+
+    poll_seconds = int(os.getenv("NOTIFICATION_WORKER_POLL_SECONDS", "60"))
+    batch_size = int(os.getenv("NOTIFICATION_WORKER_BATCH_SIZE", "200"))
+
+    app.state.notification_worker_stop_event = asyncio.Event()
+    app.state.notification_worker_task = asyncio.create_task(
+        run_notification_worker(
+            poll_seconds=poll_seconds,
+            batch_size=batch_size,
+            stop_event=app.state.notification_worker_stop_event,
+        )
+    )
+    logger.info("Notification worker enabled and started")
+
+
+@app.on_event("shutdown")
+async def shutdown_notification_worker() -> None:
+    task = getattr(app.state, "notification_worker_task", None)
+    stop_event = getattr(app.state, "notification_worker_stop_event", None)
+
+    if not task:
+        return
+
+    if stop_event:
+        stop_event.set()
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    logger.info("Notification worker stopped")
 
 
 # Routers
