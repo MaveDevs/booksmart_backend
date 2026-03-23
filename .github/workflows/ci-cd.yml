@@ -163,9 +163,25 @@ jobs:
 
           ssh "${EC2_USERNAME}@${EC2_HOST_CLEAN}" "APP_DIR='${APP_DIR}' COMPOSE_FILE='${COMPOSE_FILE}' GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' SENTRY_ENVIRONMENT='${SENTRY_ENVIRONMENT}' bash -s" <<'EOF'
           set -e
+          
+          echo "=== Deploy Debug Info ==="
+          echo "APP_DIR: $APP_DIR"
+          echo "COMPOSE_FILE: $COMPOSE_FILE"
+          echo "USER: $USER"
+          echo "PWD: $(pwd)"
+          echo "HOME: $HOME"
+          
           cd "$APP_DIR"
-
+          echo "Changed to: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          
+          echo ""
+          echo "=== Checking for .env file ==="
           FALLBACK_APP_DIR="/home/${USER}/booksmart_backend"
+          echo "Primary APP_DIR: $APP_DIR"
+          echo "Fallback APP_DIR: $FALLBACK_APP_DIR"
+          
           if [ ! -f .env ] && [ "$APP_DIR" != "$FALLBACK_APP_DIR" ] && [ -f "$FALLBACK_APP_DIR/.env" ]; then
             echo "Configured APP_DIR has no .env, falling back to $FALLBACK_APP_DIR"
             APP_DIR="$FALLBACK_APP_DIR"
@@ -174,10 +190,15 @@ jobs:
 
           if [ ! -f .env ]; then
             echo "::error:: .env not found in $APP_DIR"
+            echo "Contents of current dir:"
             pwd
             ls -la
+            echo ""
+            echo "Checking fallback dir: /home/${USER}/booksmart_backend"
+            ls -la "/home/${USER}/booksmart_backend" || echo "Fallback dir not accessible"
             exit 1
           fi
+          echo "✅ .env file found"
 
           if [ ! -f "$COMPOSE_FILE" ]; then
             if [ -f "docker-compose.yml" ]; then
@@ -207,36 +228,54 @@ jobs:
             upsert_env "SENTRY_ENVIRONMENT" "$SENTRY_ENVIRONMENT"
           fi
 
-          sudo docker compose -f "$COMPOSE_FILE" up -d --build
-
-          # Wait until api container is running before migrations
+          echo ""
+          echo "=== Starting Docker Compose ==="
+          echo "COMPOSE_FILE: $COMPOSE_FILE"
+          sudo docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee /tmp/docker-up.log
+          
+          echo ""
+          echo "=== Waiting for api container to be running ==="
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             API_CID=$(sudo docker compose -f "$COMPOSE_FILE" ps -q api)
             if [ -n "$API_CID" ]; then
               API_STATUS=$(sudo docker inspect --format='{{.State.Status}}' "$API_CID")
-              echo "api status (attempt $attempt): $API_STATUS"
+              echo "api status (attempt $attempt/12): $API_STATUS"
               if [ "$API_STATUS" = "running" ]; then
+                echo "✅ Container is running"
                 break
               fi
+            else
+              echo "api status (attempt $attempt/12): container not found yet"
             fi
             sleep 5
           done
-
+          
+          echo ""
+          echo "=== Running Database Migrations ==="
           migrate_ok=0
           for attempt in 1 2 3; do
-            if sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head; then
+            echo "Alembic upgrade attempt $attempt/3..."
+            if sudo docker compose -f "$COMPOSE_FILE" exec -T api alembic upgrade head 2>&1; then
               migrate_ok=1
+              echo "✅ Migration successful"
               break
             fi
-            echo "alembic retry $attempt failed, retrying..."
+            echo "❌ Migration failed, retrying..."
             sleep 5
           done
 
           if [ "$migrate_ok" -ne 1 ]; then
-            echo "::error::Migration failed after retries"
+            echo "::error::Migration failed after 3 retries"
+            echo ""
+            echo "Docker Compose logs:"
             sudo docker compose -f "$COMPOSE_FILE" logs --tail=200 api || true
+            echo ""
+            echo "Docker ps:"
+            sudo docker ps
             exit 1
           fi
-
+          
+          echo ""
+          echo "=== Deployment Complete ==="
           sudo docker compose -f "$COMPOSE_FILE" ps
           EOF
