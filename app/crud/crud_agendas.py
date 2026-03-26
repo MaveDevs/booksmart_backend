@@ -1,3 +1,4 @@
+from datetime import time
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -38,6 +39,27 @@ def create_agenda(db: Session, agenda: AgendaCreate) -> Agenda:
     db.commit()
     db.refresh(db_agenda)
     return db_agenda
+
+
+def create_agendas_bulk(
+    db: Session, establecimiento_id: int, dias_semana: List[str], hora_inicio: time, hora_fin: time
+) -> List[Agenda]:
+    """Create multiple agendas for an establishment in one transaction."""
+    created_agendas = []
+    for dia in dias_semana:
+        db_agenda = Agenda(
+            establecimiento_id=establecimiento_id,
+            dia_semana=dia,
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+        )
+        db.add(db_agenda)
+        created_agendas.append(db_agenda)
+    
+    db.commit()
+    for agenda in created_agendas:
+        db.refresh(agenda)
+    return created_agendas
 
 
 def update_agenda(db: Session, agenda_id: int, agenda: AgendaUpdate) -> Optional[Agenda]:
