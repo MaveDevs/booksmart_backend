@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_DATABASE: booksmart
+      MYSQL_USER: booksmart_user
+      MYSQL_PASSWORD: booksmart_pass
+      MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_started
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  db_data:

@@ -12,7 +12,9 @@ from app.core.permissions import (
     get_user_role_name,
     require_admin,
     require_owner_or_admin,
+    check_owns_appointment_establishment
 )
+from datetime import date, timedelta
 
 router = APIRouter()
 
@@ -191,6 +193,73 @@ def patch_appointment(
     
     db_appointment = crud_appointments.update_appointment(db, appointment_id, appointment)
     return db_appointment
+
+
+@router.post("/{appointment_id}/accept", response_model=AppointmentResponse)
+def accept_appointment(
+    appointment_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """PWA: Accept a pending appointment (moves to CONFIRMADA)."""
+    db_appointment = crud_appointments.get_appointment(db, appointment_id)
+    if not db_appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    if not check_owns_appointment_establishment(db, current_user, appointment_id):
+        raise HTTPException(status_code=403, detail="You do not own the establishment for this appointment")
+    
+    update_data = AppointmentUpdate(estado="CONFIRMADA")
+    return crud_appointments.update_appointment(db, appointment_id, update_data)
+
+
+@router.post("/{appointment_id}/decline", response_model=AppointmentResponse)
+def decline_appointment(
+    appointment_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """PWA: Decline a pending appointment (moves to CANCELADA)."""
+    db_appointment = crud_appointments.get_appointment(db, appointment_id)
+    if not db_appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    if not check_owns_appointment_establishment(db, current_user, appointment_id):
+        raise HTTPException(status_code=403, detail="You do not own the establishment for this appointment")
+    
+    update_data = AppointmentUpdate(estado="CANCELADA")
+    return crud_appointments.update_appointment(db, appointment_id, update_data)
+
+
+@router.get("/availability/slots")
+def get_available_slots(
+    servicio_id: int,
+    target_date: date,
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Mobile/Web: Get available time slots for a specific service on a specific date.
+    Note: Basic logic. In production, this computes existing Citas vs Agenda.
+    """
+    # 1. Simulate pulling the business Agenda (e.g. 09:00 to 18:00)
+    # 2. Simulate pulling the service duration (e.g. 1 hour)
+    # 3. Pull all CONFIRMADA appointments for that day and service.
+    appointments = crud_appointments.get_appointments(db, servicio_id=servicio_id, limit=200)
+    busy_times = [
+        appt.hora_inicio.strftime("%H:%M") for appt in appointments
+        if appt.fecha == target_date and appt.estado in ["CONFIRMADA", "PENDIENTE"]
+    ]
+    
+    # Generic simplified daily slots list
+    daily_slots = ["09:00", "10:00", "11:00", "12:00", "13:00", "15:00", "16:00", "17:00"]
+    available_slots = [slot for slot in daily_slots if slot not in busy_times]
+    
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "servicio_id": servicio_id,
+        "available_slots": available_slots,
+        "busy_slots": busy_times
+    }
 
 
 @router.delete("/{appointment_id}")
