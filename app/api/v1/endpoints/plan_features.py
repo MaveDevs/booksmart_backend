@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.crud import crud_plan_features
+from app.crud import crud_plans
 from app.models import User
 from app.models.plan_features import FeatureKey
 from app.schemas.plan_features import PlanFeatureCreate, PlanFeatureResponse, PlanFeatureUpdate
@@ -134,19 +135,24 @@ def seed_plan_features_endpoint(
         FeatureKey.REPORTES_AVANZADOS,
     ]
     
-    seed_map = {
-        # Mapear plan_id a su feature set
-        # 1: free_features,
-        # 2: premium_features,
-    }
-    
-    if plan_id not in seed_map:
+    plan = crud_plans.get_plan(db, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    plan_name = (plan.nombre or "").strip().upper()
+    if plan_name == "FREE":
+        features = free_features
+    elif plan_name == "PREMIUM":
+        features = premium_features
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"No seed definition for plan_id {plan_id}. Update seeds in endpoint.",
+            detail=(
+                "No default seed feature set for this plan name. "
+                "Supported: FREE, PREMIUM."
+            ),
         )
-    
-    features = seed_map[plan_id]
+
     created = crud_plan_features.seed_plan_features(db, plan_id, features)
     
     return {

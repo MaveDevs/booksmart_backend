@@ -10,7 +10,7 @@ services:
       MYSQL_PASSWORD: booksmart_pass
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
 
@@ -20,6 +20,8 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://booksmart_user:booksmart_pass@db:3306/booksmart
     depends_on:
       db:
         condition: service_started

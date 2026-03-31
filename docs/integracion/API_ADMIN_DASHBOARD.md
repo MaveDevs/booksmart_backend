@@ -24,12 +24,12 @@ Permite al Superadmin visualizar, bloquear o crear todas las entidades humanas d
 Endpoints para controlar los planes que puede elegir un negocio (Freemium, Pro, etc).
 - **`POST /api/v1/plans/`**: Crear un nuevo modelo de Plan de suscripción dictando su precio.
 - **`PUT /api/v1/plans/{id}`**: Modificar precio o capacidad de un plan.
-- **`POST /api/v1/plan_features/`**: Configurar qué "Features" (Analíticas, Auto-notificaciones) se encienden según el Plan elegido.
+- **`POST /api/v1/plan-features/`**: Configurar qué "Features" (Analíticas, Auto-notificaciones) se encienden según el Plan elegido.
 - **`GET /api/v1/subscriptions/`**: Visualizar el histórico de pagos y suscripciones de todos los locales hacia la plataforma Booksmart.
 
 ## 🚩 Quejas y Soporte Técnico (Reportes)
 - **`GET /api/v1/reports/`**: Bandeja de entrada de quejas (Ej: Un cliente reportó a un establecimiento por fraude).
-- **`PATCH /api/v1/reports/{id}`**: Marcar reporte como "RESUELTO" o "EN REVISIÓN".
+- **`PATCH /api/v1/reports/{id}`**: Marcar reporte como `PENDIENTE`, `EN_REVISION`, `RESUELTO` o `RECHAZADO`.
 
 ## 📊 Analíticas Globales del Sistema
-- **`GET /api/v1/analytics/system-overview`**: (Uso interno) Métricas crudas operativas de toda la base de datos (Ingresos generados por comisiones, número de citas totales cruzando en el mes).
+- **`GET /api/v1/analytics/system-overview`**: Métricas globales operativas de toda la plataforma (usuarios, establecimientos, citas, suscripciones e ingresos).

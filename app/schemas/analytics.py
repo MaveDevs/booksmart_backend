@@ -139,3 +139,21 @@ class EstablishmentAnalyticsResponse(BaseModel):
     
     # Recommendations
     sugerencias: List[SuggestionPromocionResponse]
+
+
+class AnalyticsSystemOverviewResponse(BaseModel):
+    """Global KPI response for admin dashboard."""
+
+    generated_at: datetime
+    period_month: str
+    total_users: int
+    active_users: int
+    total_establishments: int
+    active_establishments: int
+    total_appointments: int
+    appointments_this_month: int
+    completed_appointments_this_month: int
+    cancelled_appointments_this_month: int
+    active_subscriptions: int
+    revenue_total: float
+    revenue_this_month: float

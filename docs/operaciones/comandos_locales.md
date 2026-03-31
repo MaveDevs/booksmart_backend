@@ -1,3 +1,6 @@
+Guia completa:
+docs/operaciones/GUIA_ENTORNO_DESARROLLO.md
+
 Para apagar el entorno:
 docker compose -f docker-compose.dev.yml down
 
