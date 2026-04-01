@@ -93,6 +93,11 @@ def root():
     return {"message": "Welcome to backend", "status": "active"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 async def startup_notification_worker() -> None:
     if not _is_notification_worker_enabled():
