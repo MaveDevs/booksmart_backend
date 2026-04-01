@@ -35,7 +35,7 @@ Tu plataforma maneja **3 entidades principales** para los dueños (owners):
                    │  └─ 💳 SUBSCRIPTIONS
                    │     └─ Plan actual, estado, fecha_expiracion
                    │
-                   └─ 👨‍💼 WORKERS (Tu equipo) - SIN ENDPOINTS AÚN
+                   └─ 👨‍💼 WORKERS (Tu equipo) - Gestionable vía /api/v1/workers
 
 
 ┌─────────────────────────────────────────┐

@@ -55,7 +55,8 @@ def _seed_default_roles(connection) -> None:
 			INSERT IGNORE INTO `{table_name}` (`rol_id`, `nombre`, `descripcion`) VALUES
 				(1, 'CLIENTE', 'Usuario final que reserva citas'),
 				(2, 'Dueño', 'Dueño de establecimiento'),
-				(3, 'Admin', 'Administrador del sistema')
+				(3, 'Admin', 'Administrador del sistema'),
+				(4, 'Trabajador', 'Empleado del establecimiento')
 			"""
 		)
 	)

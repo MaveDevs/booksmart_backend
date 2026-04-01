@@ -22,3 +22,4 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     sent_messages = relationship("Message", foreign_keys="Message.emisor_id", back_populates="sender")
     push_subscriptions = relationship("PushSubscription", back_populates="user")
+    worker_profile = relationship("Worker", back_populates="user", uselist=False)

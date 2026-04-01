@@ -9,16 +9,21 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision: str = '0ebf11d8390d'
-down_revision: Union[str, Sequence[str], None] = None
+down_revision: Union[str, Sequence[str], None] = '000000000000'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     """Upgrade schema."""
+    inspector = inspect(op.get_bind())
+    if inspector.has_table('push_subscription'):
+        return
+
     op.create_table('push_subscription',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('usuario_id', sa.Integer(), nullable=False),

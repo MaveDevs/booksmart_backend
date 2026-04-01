@@ -29,6 +29,7 @@ class RoleType(str, Enum):
     CLIENTE = "cliente"
     DUENO = "dueño"
     ADMIN = "admin"
+    TRABAJADOR = "trabajador"
 
 
 def get_user_role_name(user: User) -> Optional[str]:
@@ -42,6 +43,8 @@ def get_user_role_name(user: User) -> Optional[str]:
         return RoleType.DUENO.value
     if user.rol_id == 3:
         return RoleType.ADMIN.value
+    if user.rol_id == 4:
+        return RoleType.TRABAJADOR.value
 
     return None
 

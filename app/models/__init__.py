@@ -13,7 +13,7 @@ from .workers import Worker
 
 from .notifications import Notification
 from .auto_notifications import AutoNotification, AutoNotificationType, NotificationChannel, AutoNotificationStatus
-from .reports import Report
+from .reports import Report, ReportStatus
 from .analytics import OccupancyAnalytics, SuggestionPromocion, DayOfWeek
 
 from .plans import Plan

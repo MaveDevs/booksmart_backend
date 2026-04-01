@@ -10,6 +10,7 @@ class Worker(Base):
 	
 	trabajador_id = Column(Integer, primary_key=True, autoincrement=True)
 	establecimiento_id = Column(Integer, ForeignKey("establecimiento.establecimiento_id", ondelete="CASCADE"), nullable=False)
+	usuario_id = Column(Integer, ForeignKey("usuario.usuario_id", ondelete="SET NULL"), nullable=True)
 	nombre = Column(String(50), nullable=False)
 	apellido = Column(String(50), nullable=False)
 	email = Column(String(100))
@@ -22,3 +23,4 @@ class Worker(Base):
 	fecha_creacion = Column(TIMESTAMP, server_default=func.now())
 	
 	establishment = relationship("Establishment", back_populates="workers")
+	user = relationship("User", back_populates="worker_profile")

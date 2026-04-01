@@ -1,6 +1,6 @@
 import enum
 from datetime import time
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, model_validator
 
@@ -30,6 +30,13 @@ class AgendaBase(BaseModel):
 
 class AgendaCreate(AgendaBase):
 	pass
+
+
+class AgendaBulkCreate(BaseModel):
+	establecimiento_id: int
+	dias_semana: List[DayOfWeek]
+	hora_inicio: time
+	hora_fin: time
 
 
 class AgendaUpdate(BaseModel):

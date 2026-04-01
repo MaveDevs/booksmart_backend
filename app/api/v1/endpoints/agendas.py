@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api import deps
 from app.crud import crud_agendas, crud_establishments
 from app.models import User
-from app.schemas.agendas import AgendaCreate, AgendaResponse, AgendaUpdate
+from app.schemas.agendas import AgendaCreate, AgendaBulkCreate, AgendaResponse, AgendaUpdate
 from app.core.permissions import (
     require_owner_or_admin,
     validate_establishment_access,
@@ -57,6 +57,31 @@ def create_agenda(
     
     try:
         return crud_agendas.create_agenda(db, agenda)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/bulk", response_model=List[AgendaResponse])
+def create_agendas_bulk(
+    agenda_bulk: AgendaBulkCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_owner_or_admin()),
+):
+    """Create multiple agendas for an establishment in one request."""
+    establishment = crud_establishments.get_establishment(db, agenda_bulk.establecimiento_id)
+    if not establishment:
+        raise HTTPException(status_code=404, detail="Establishment not found")
+    
+    validate_establishment_access(current_user, establishment)
+    
+    try:
+        return crud_agendas.create_agendas_bulk(
+            db, 
+            establecimiento_id=agenda_bulk.establecimiento_id,
+            dias_semana=[d.value for d in agenda_bulk.dias_semana],
+            hora_inicio=agenda_bulk.hora_inicio,
+            hora_fin=agenda_bulk.hora_fin
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
