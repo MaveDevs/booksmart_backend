@@ -107,3 +107,12 @@ docker compose -f docker-compose.dev.yml up -d --force-recreate api
 
 - Error de auth en desarrollo:
   - Verifica `JWT_AUTH_DISABLED=true` y reinicia API.
+
+- Error `Can't connect to MySQL server on 'db' ([Errno 111] Connection refused)` al migrar:
+  - La API inicio antes de que MySQL terminara bootstrap.
+  - Espera que `db` este `healthy` en `docker compose ... ps`.
+  - Reintenta:
+
+```bash
+docker compose -f docker-compose.dev.yml exec api alembic upgrade head
+```

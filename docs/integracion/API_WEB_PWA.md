@@ -1,47 +1,207 @@
-# API Referencia - Aplicación PWA Web (Dueños y Trabajadores)
+# API de Integracion - PWA (Angular 21)
 
-Este documento centraliza los endpoints operacionales que consume la Progressive Web App (PWA) de **Booksmart**. Esta herramienta es usada por los negocios para administrar su catálogo interno, horarios, y despachar citas.
+Guia completa para la PWA de Booksmart orientada a `DUENO` y `TRABAJADOR`.
+Esta version esta alineada con endpoints reales del backend actual.
 
----
+## 1. Stack recomendado en Angular 21
 
-## 🔐 Autenticación
-- **`POST /api/v1/auth/login/access-token`**: Loguear a un "Dueño" o a un "Trabajador". Devuelve el JWT.
+- `HttpClient` + `provideHttpClient(withInterceptors(...))` para JWT.
+- `Signals` para estado global de sesion, negocio seleccionado y feature gates.
+- `RxJS` para polling liviano y composition de vistas (dashboard, calendario, chat).
+- `SwPush` para registro Web Push en navegador.
+- `WebSocket` nativo para tiempo real en `/api/v1/ws`.
 
-## 🏪 Configuración de Negocio (Establecimiento y Servicios)
-El negocio gestiona su propia vitrina (información pública, qué servicios ofrece y cuánto cuestan).
-- **`GET /api/v1/establishments/me`**: Carga el perfil del negocio logueado.
-- **`PUT /api/v1/establishments/me`**: Editar nombre comercial, logo, descripción o ubicación geográfica.
-- **`GET /api/v1/services/` (con filtrado por `establecimiento_id`)**: Listar todos los servicios del local.
-- **`POST /api/v1/services/`**: Dar de alta un nuevo servicio (Ej: "Decoloración - $500 - 1Hr").
-- **`PUT /api/v1/services/{id}`**: Modificar un servicio y marcarlo como exclusivo o general.
-- **`DELETE /api/v1/services/{id}`**: Archivar servicio (Borrado lógico para no perder histórico).
+## 2. Autenticacion y sesion
 
-## 👥 Empleados (Trabajadores de Nómina)
-Invitar a trabajadores a unirse al establecimiento. Como acordamos, el backend automágicamente les generará una cuenta de `Usuario` (TRABAJADOR) con contraseña nativa.
-- **`GET /api/v1/workers/`**: Listar a la plantilla del negocio.
-- **`POST /api/v1/workers/`**: Registrar empleado (`nombre, email`). Internamente el backend mapea su `usuario_id` para que pueda loguearse a la PWA con la temporal "WorkerTemp123!".
-- **`PUT /api/v1/workers/{id}`**: Reasignar rol, vacaciones o despedir.
+### Login
+- `POST /api/v1/auth/login/access-token`
 
-## 🕒 Horarios de Atención (Agendas)
-Decidir cuándo el personal y el negocio laboran para bloquear inteligentemente la app cliente.
-- **`GET /api/v1/agendas/`**: Leer las horas operativas del día/semana del negocio o de un *worker* en particular.
-- **`POST /api/v1/agendas/`**: Fijar horarios: Lunes(09:00 - 18:00), comida(13:00 - 14:00).
-- **`PUT /api/v1/agendas/{id}`**: Modificar urgencia de cierre (Ej. "Cerrar hoy temprano").
+Body:
 
-## 📅 Bandeja de Entrada y Contingencias de Citas
-Aquí recae el trabajo del día a día (Control del Plan Freemium vs Pro).
-- **`GET /api/v1/appointments/`**: Lista filtrada en matriz de las citas agendadas y por aceptar.
-- **`POST /api/v1/appointments/{id}/accept`**: Aceptación manual de cita pendiente (La pasa a CONFIRMADA).
-- **`POST /api/v1/appointments/{id}/decline`**: Intercambia cita a CANCELADA y libera el "Slot" a la App móvil automáticamente.
-- **`PATCH /api/v1/appointments/{id}`**: Actualizar la cita a COMPLETADA (para cerrar tickets) o *reprogramar en caliente* una hora de inicio si el cliente está atorado en tráfico.
+```json
+{
+	"email": "owner@negocio.com",
+	"password": "******"
+}
+```
 
-## 💭 Interacciones en Tiempo Real & Auto-Recordatorios
-- **`GET /api/v1/messages/`**: Bandeja de chat ligada a la Cita.
-- **`POST /api/v1/messages/`**: Escribir un recado al cliente. Socket despachado a la App Móvil.
-- **`POST /api/v1/push-subscriptions/`**: Habilitar PWA para recibir notificaciones sonoras cuando llegue una reserva.
-- **`GET /api/v1/auto-notifications/`**: (Solo Planes PRO) Configurar plantillas de "Aviso de llegada en 30 minutos vía SMS".
+Respuesta esperada:
 
-## 💳 Pagos Logísticos y Analíticas (Planes de Pago)
-- **`GET /api/v1/analytics/ocupacion`**: Reporte semanal para saber porcentaje de ocupación (horas libres VS horas trabajadas) e identificar ineficiencias monetarias.
-- **`GET /api/v1/payments/`**: Listar depósitos parciales dejados por clientes mediante tarjeta en Stripe/PayPal.
-- **`PATCH /api/v1/subscriptions/upgrade`**: Pagar la suscripción a Booksmart Pro/Premium y desbloquear las Analíticas y Notificaciones automáticas.
+```json
+{
+	"access_token": "<jwt>",
+	"token_type": "bearer"
+}
+```
+
+### Uso del token
+- Header en cada request protegido: `Authorization: Bearer <jwt>`.
+- WebSocket: `wss://<host>/api/v1/ws?token=<jwt>`.
+
+## 3. Flujo funcional PWA por modulos
+
+### 3.1 Negocio (Establecimiento + Perfil)
+
+- `GET /api/v1/establishments?user_id={ownerId}`: negocios del dueño.
+- `GET /api/v1/establishments/{establishment_id}`: detalle del negocio.
+- `POST /api/v1/establishments`: crear establecimiento.
+- `PUT/PATCH /api/v1/establishments/{establishment_id}`: editar negocio.
+- `GET /api/v1/profiles?establecimiento_id={id}` o por id de perfil.
+- `POST /api/v1/profiles`, `PUT/PATCH /api/v1/profiles/{profile_id}`.
+
+Nota: en backend actual no existe `/establishments/me` ni `/profiles/me`.
+
+### 3.2 Servicios
+
+- `GET /api/v1/services?establishment_id={id}`
+- `POST /api/v1/services`
+- `PUT/PATCH /api/v1/services/{service_id}`
+- `DELETE /api/v1/services/{service_id}`
+
+### 3.3 Workers
+
+- `GET /api/v1/workers?establecimiento_id={id}`
+- `POST /api/v1/workers`
+- `PUT/PATCH /api/v1/workers/{worker_id}`
+- `DELETE /api/v1/workers/{worker_id}`
+
+### 3.4 Agendas
+
+- `GET /api/v1/agendas?establecimiento_id={id}`
+- `POST /api/v1/agendas`
+- `POST /api/v1/agendas/bulk` para carga masiva semanal.
+- `PUT/PATCH /api/v1/agendas/{agenda_id}`
+- `DELETE /api/v1/agendas/{agenda_id}`
+
+### 3.5 Citas (core operativo)
+
+- `GET /api/v1/appointments` con filtros (`servicio_id`, etc).
+- `GET /api/v1/appointments/{appointment_id}`
+- `PUT/PATCH /api/v1/appointments/{appointment_id}`
+- `POST /api/v1/appointments/{appointment_id}/accept`
+- `POST /api/v1/appointments/{appointment_id}/decline`
+
+Slot discovery para UI:
+
+- `GET /api/v1/appointments/availability/slots?servicio_id={id}&target_date=YYYY-MM-DD`
+
+### 3.6 Mensajeria en cita
+
+- `GET /api/v1/messages?cita_id={appointment_id}`
+- `POST /api/v1/messages`
+- `PUT/PATCH /api/v1/messages/{message_id}`
+
+Regla clave: `emisor_id` debe coincidir con el usuario autenticado.
+
+### 3.7 Notificaciones
+
+- `GET /api/v1/notifications/me`
+- `PATCH /api/v1/notifications/{notification_id}` (ejemplo: `leida=true`)
+
+Tiempo real:
+- `WS /api/v1/ws?token=<jwt>`
+- Eventos server: `notification`, `message`, `appointment`, `ping`.
+- Evento cliente: `{"type":"mark_read","id":123}`.
+
+### 3.8 Web Push en PWA
+
+- `POST /api/v1/push-subscriptions`
+- `GET /api/v1/push-subscriptions`
+- `DELETE /api/v1/push-subscriptions?endpoint=<...>`
+
+Payload de registro:
+
+```json
+{
+	"endpoint": "https://fcm.googleapis.com/fcm/send/...",
+	"keys": {
+		"p256dh": "...",
+		"auth": "..."
+	}
+}
+```
+
+## 4. Planes y features (impacto en la PWA)
+
+### 4.1 Donde se gestiona
+
+- Planes: `GET /api/v1/plans`, `POST/PUT/PATCH /api/v1/plans/{id}` (admin para escritura).
+- Features por plan: `GET/POST /api/v1/plan-features`.
+- Suscripcion por establecimiento: `GET /api/v1/subscriptions?establecimiento_id={id}`.
+
+### 4.2 Features relevantes para producto
+
+- `ANALYTICS_OCUPACION`: habilita consumo de ocupacion.
+- `SUGERIR_PROMOS`: habilita sugerencias/promos.
+- `AUTO_REMINDERS`, `AUTO_CONFIRMACION`, `AUTO_RECOVERY`, `AUTO_RESEÑA_PROMPT`: automatizaciones.
+- `DESTACADO_LISTING`, `CAMPAÑAS_VISIBILIDAD`: visibilidad prioritaria.
+- `REPORTES_AVANZADOS`: reporteria premium.
+
+### 4.3 Comportamiento recomendado en frontend
+
+- Cargar suscripcion y features al entrar a negocio.
+- Guardar en estado (`signals`) y condicionar UI:
+	- Ocultar modulo analytics si falta `ANALYTICS_OCUPACION`.
+	- Ocultar sugerencias si falta `SUGERIR_PROMOS`.
+	- Mostrar badge de plan y upsell contextual.
+
+## 5. Analiticas para la PWA (owner)
+
+Endpoints:
+
+- `POST /api/v1/analytics/occupancy/recalculate/{establecimiento_id}`
+- `GET /api/v1/analytics/occupancy/?establecimiento_id={id}&fecha=YYYY-MM-DD`
+- `GET /api/v1/analytics/occupancy/idle-times?establecimiento_id={id}`
+- `GET /api/v1/analytics/suggestions/?establecimiento_id={id}`
+- `GET /api/v1/analytics/suggestions/unread?establecimiento_id={id}`
+- `PUT /api/v1/analytics/suggestions/{sugerencia_id}/mark-read`
+- `PUT /api/v1/analytics/suggestions/{sugerencia_id}/mark-implemented`
+- `GET /api/v1/analytics/dashboard/{establecimiento_id}`
+
+Feature gating backend:
+- Si el plan no tiene feature, backend responde `403`.
+
+## 6. Automatizaciones y notificaciones automaticas
+
+El backend ya tiene modulo `auto-notifications`, pero en la API actual:
+
+- Admin tiene control total (`GET/POST/PUT/PATCH/DELETE`).
+- Owner no tiene listado global habilitado actualmente (`403` en `GET /auto-notifications`).
+
+Recomendacion PWA:
+- Consumir notificaciones operativas via `notifications` + `ws`.
+- Tratar `auto-notifications` como modulo administrativo/interno hasta abrir filtros owner.
+
+## 7. Visibilidad prioritaria (planes)
+
+La visibilidad prioritaria se representa por features:
+
+- `DESTACADO_LISTING`
+- `CAMPAÑAS_VISIBILIDAD`
+
+Backend actual:
+- Define y persiste estas features por plan.
+- No expone aun un endpoint dedicado de ranking/promocion visual para PWA.
+
+Recomendacion:
+- Mostrar estado de visibilidad en pantalla de plan/suscripcion.
+- Si se requiere ranking en listados publicos, crear endpoint dedicado en siguiente fase.
+
+## 8. Orden sugerido de integracion en Angular 21
+
+1. Auth + interceptor JWT.
+2. Selector de establecimiento (multi-negocio owner).
+3. Servicios/agendas.
+4. Calendario de citas + `accept/decline`.
+5. Chat por cita + WS.
+6. Notificaciones + Web Push.
+7. Suscripcion/features + feature flags en UI.
+8. Analytics/suggestions premium.
+
+## 9. Checklist de release PWA
+
+- Manejo de `403` por feature y por ownership.
+- Reintentos para WS + heartbeat (`ping/pong`).
+- Registro/desregistro de push al login/logout.
+- Logs de UX para cambios de estado de cita.
+- Pruebas con owner `FREE` y `PREMIUM`.
