@@ -54,3 +54,14 @@ class EstablishmentResponse(EstablishmentBase):
 
     class Config:
         from_attributes = True
+
+
+class NearbyEstablishmentResponse(EstablishmentResponse):
+    distance_km: float
+    ranking_score: float
+    subscription_active: bool = False
+    subscription_plan_id: Optional[int] = None
+    subscription_plan_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

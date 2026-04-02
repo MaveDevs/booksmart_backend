@@ -11,7 +11,12 @@ from app.core.permissions import (
 )
 from app.crud import crud_establishments
 from app.models import User
-from app.schemas.establishments import EstablishmentCreate, EstablishmentUpdate, EstablishmentResponse
+from app.schemas.establishments import (
+    EstablishmentCreate,
+    EstablishmentUpdate,
+    EstablishmentResponse,
+    NearbyEstablishmentResponse,
+)
 
 router = APIRouter()
 
@@ -28,6 +33,41 @@ def get_establishments(
     if user_id:
         return crud_establishments.get_establishments_by_user(db, user_id=user_id, skip=skip, limit=limit)
     return crud_establishments.get_establishments(db, skip=skip, limit=limit)
+
+
+@router.get("/nearby", response_model=list[NearbyEstablishmentResponse])
+def get_nearby_establishments(
+    latitude: float = Query(..., ge=-90, le=90),
+    longitude: float = Query(..., ge=-180, le=180),
+    radius_km: float = Query(10.0, gt=0, le=200),
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Get nearby active establishments ranked by distance and subscription priority."""
+    ranked_establishments = crud_establishments.get_establishments_nearby(
+        db,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        skip=skip,
+        limit=limit,
+    )
+
+    return [
+        NearbyEstablishmentResponse.model_validate(
+            {
+                **EstablishmentResponse.model_validate(item["establishment"], from_attributes=True).model_dump(),
+                "distance_km": item["distance_km"],
+                "ranking_score": item["ranking_score"],
+                "subscription_active": item["subscription_active"],
+                "subscription_plan_id": item["subscription_plan_id"],
+                "subscription_plan_name": item["subscription_plan_name"],
+            }
+        )
+        for item in ranked_establishments
+    ]
 
 
 @router.get("/{establishment_id}", response_model=EstablishmentResponse)
