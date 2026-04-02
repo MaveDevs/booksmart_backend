@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from app.api.v1.api import api_router
 from app.core.monitoring import init_sentry
+from app.crud import crud_plans
+from app.db.session import SessionLocal
 from app.tasks.notification_worker import run_notification_worker
 
 init_sentry()
@@ -28,6 +30,10 @@ def _build_api_description() -> str:
 
 def _is_notification_worker_enabled() -> bool:
     return os.getenv("NOTIFICATION_WORKER_ENABLED", "false").lower() == "true"
+
+
+def _is_default_plan_seed_enabled() -> bool:
+    return os.getenv("AUTO_SEED_DEFAULT_PLANS", "true").lower() == "true"
 
 
 app = FastAPI(
@@ -108,8 +114,30 @@ def health():
     return {"status": "ok"}
 
 
+def _seed_default_plans_if_needed() -> None:
+    if not _is_default_plan_seed_enabled():
+        logger.info("AUTO_SEED_DEFAULT_PLANS disabled")
+        return
+
+    db = SessionLocal()
+    try:
+        result = crud_plans.initialize_default_plans(db)
+        logger.info(
+            "Default plan seed complete | created=%s free_plan_id=%s premium_plan_id=%s",
+            result.get("created"),
+            result.get("free_plan_id"),
+            result.get("premium_plan_id"),
+        )
+    except Exception:
+        logger.exception("Failed to seed default plans")
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 async def startup_notification_worker() -> None:
+    _seed_default_plans_if_needed()
+
     if not _is_notification_worker_enabled():
         return
 
