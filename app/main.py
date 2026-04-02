@@ -37,6 +37,21 @@ app = FastAPI(
 )
 
 
+def _get_allowed_origins() -> list[str]:
+    raw_origins = os.getenv(
+        "ALLOWED_ORIGINS",
+        ",".join([
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+            "http://192.168.0.152:4200",
+            "http://localhost:8100",
+            "http://booksmartutt.duckdns.org",
+            "https://booksmartutt.duckdns.org",
+        ]),
+    )
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -72,12 +87,7 @@ app.openapi = custom_openapi
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",
-        "http://127.0.0.1:4200",
-        "http://192.168.0.152:4200",
-        "http://localhost:8100", # Ionic/Capacitor potentially
-    ],
+    allow_origins=_get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
