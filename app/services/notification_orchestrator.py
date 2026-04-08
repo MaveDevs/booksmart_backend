@@ -13,6 +13,7 @@ Usage example:
 """
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -214,6 +215,16 @@ class NotificationOrchestrator:
         )
         create_auto_notification(db, notif)
 
+    def _run_sync(self, coro) -> None:
+        """Run coroutine from sync contexts, including AnyIO worker threads."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(coro)
+            return
+
+        loop.create_task(coro)
+
     def on_appointment_created_sync(
         self, db: Session, appointment_id: int, establishment_id: int
     ) -> None:
@@ -222,19 +233,9 @@ class NotificationOrchestrator:
         Use this from sync CRUD contexts.
         """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context, schedule as task
-                asyncio.create_task(
-                    self.on_appointment_created(db, appointment_id, establishment_id)
-                )
-            else:
-                loop.run_until_complete(
-                    self.on_appointment_created(db, appointment_id, establishment_id)
-                )
+            self._run_sync(self.on_appointment_created(db, appointment_id, establishment_id))
         except Exception as e:
             # Log and continue - notifications are non-critical
-            import logging
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_appointment_confirmed_sync(
@@ -242,17 +243,8 @@ class NotificationOrchestrator:
     ) -> None:
         """Synchronous version of on_appointment_confirmed"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(
-                    self.on_appointment_confirmed(db, appointment_id, establishment_id)
-                )
-            else:
-                loop.run_until_complete(
-                    self.on_appointment_confirmed(db, appointment_id, establishment_id)
-                )
+            self._run_sync(self.on_appointment_confirmed(db, appointment_id, establishment_id))
         except Exception as e:
-            import logging
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_appointment_cancelled_sync(
@@ -264,17 +256,10 @@ class NotificationOrchestrator:
     ) -> None:
         """Synchronous version of on_appointment_cancelled"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(
-                    self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
-                )
-            else:
-                loop.run_until_complete(
-                    self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
-                )
+            self._run_sync(
+                self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
+            )
         except Exception as e:
-            import logging
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_appointment_completed_sync(
@@ -282,17 +267,8 @@ class NotificationOrchestrator:
     ) -> None:
         """Synchronous version of on_appointment_completed"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(
-                    self.on_appointment_completed(db, appointment_id, establishment_id)
-                )
-            else:
-                loop.run_until_complete(
-                    self.on_appointment_completed(db, appointment_id, establishment_id)
-                )
+            self._run_sync(self.on_appointment_completed(db, appointment_id, establishment_id))
         except Exception as e:
-            import logging
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_message_received_sync(
@@ -300,15 +276,8 @@ class NotificationOrchestrator:
     ) -> None:
         """Synchronous version of on_message_received"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(self.on_message_received(db, message_id, establishment_id))
-            else:
-                loop.run_until_complete(
-                    self.on_message_received(db, message_id, establishment_id)
-                )
+            self._run_sync(self.on_message_received(db, message_id, establishment_id))
         except Exception as e:
-            import logging
             logging.error(f"Notification orchestration failed: {e}")
 
 
