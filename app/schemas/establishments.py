@@ -36,7 +36,6 @@ class EstablishmentUpdate(BaseModel):
     latitud: Optional[float] = Field(None, ge=-90, le=90)
     longitud: Optional[float] = Field(None, ge=-180, le=180)
     telefono: Optional[str] = Field(None, max_length=20)
-    usuario_id: Optional[int] = None
     activo: Optional[bool] = None
 
     @field_validator("telefono")
