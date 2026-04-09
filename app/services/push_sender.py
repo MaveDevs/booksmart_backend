@@ -42,7 +42,31 @@ def send_push(
         "endpoint": endpoint,
         "keys": {"p256dh": p256dh, "auth": auth},
     }
-    payload = json.dumps({"title": title, "body": body, "url": url})
+    # Angular's ngsw-worker displays system notifications only when payload
+    # includes a `notification` object with at least `title`.
+    payload = json.dumps(
+        {
+            # Legacy top-level fields kept for compatibility with in-app handlers.
+            "title": title,
+            "body": body,
+            "url": url,
+            "notification": {
+                "title": title,
+                "body": body,
+                "icon": "/icons/icon-192x192.png",
+                "badge": "/icons/icon-72x72.png",
+                "data": {
+                    "url": url,
+                    "onActionClick": {
+                        "default": {
+                            "operation": "openWindow",
+                            "url": url,
+                        }
+                    },
+                },
+            },
+        }
+    )
 
     try:
         webpush(
