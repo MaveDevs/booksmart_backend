@@ -58,6 +58,7 @@ class AppointmentResponse(AppointmentBase):
 	cliente_apellido: Optional[str] = None
 	trabajador_nombre: Optional[str] = None
 	trabajador_apellido: Optional[str] = None
+	servicio_nombre: Optional[str] = None
 
 	class Config:
 		from_attributes = True

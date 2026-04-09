@@ -26,3 +26,7 @@ class Review(Base):
 	establishment = relationship("Establishment", back_populates="reviews")
 	user = relationship("User", back_populates="reviews")
 
+	@property
+	def usuario_nombre(self) -> str:
+		return f"{self.user.nombre} {self.user.apellido}" if self.user else "Usuario"
+

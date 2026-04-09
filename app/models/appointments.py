@@ -48,3 +48,7 @@ class Appointment(Base):
 	@property
 	def trabajador_apellido(self):
 		return self.worker.apellido if self.worker else None
+
+	@property
+	def servicio_nombre(self):
+		return self.service.nombre if self.service else None

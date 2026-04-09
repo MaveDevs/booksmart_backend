@@ -25,6 +25,7 @@ class ReviewUpdate(BaseModel):
 class ReviewResponse(ReviewBase):
 	resena_id: int
 	fecha: datetime
+	usuario_nombre: Optional[str] = None
 
 	class Config:
 		from_attributes = True
