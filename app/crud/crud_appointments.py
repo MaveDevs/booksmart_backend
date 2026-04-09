@@ -1,13 +1,18 @@
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Appointment, Service, User
 from app.schemas.appointments import AppointmentCreate, AppointmentUpdate
 
 
 def get_appointment(db: Session, appointment_id: int) -> Optional[Appointment]:
-    return db.query(Appointment).filter(Appointment.cita_id == appointment_id).first()
+    return (
+        db.query(Appointment)
+        .options(joinedload(Appointment.client), joinedload(Appointment.worker), joinedload(Appointment.service))
+        .filter(Appointment.cita_id == appointment_id)
+        .first()
+    )
 
 
 def get_appointments(
@@ -18,7 +23,11 @@ def get_appointments(
     servicio_id: Optional[int] = None,
     trabajador_id: Optional[int] = None,
 ) -> List[Appointment]:
-    query = db.query(Appointment)
+    query = db.query(Appointment).options(
+        joinedload(Appointment.client), 
+        joinedload(Appointment.worker), 
+        joinedload(Appointment.service)
+    )
     if cliente_id is not None:
         query = query.filter(Appointment.cliente_id == cliente_id)
     if servicio_id is not None:
