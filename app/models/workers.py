@@ -23,4 +23,4 @@ class Worker(Base):
 	fecha_creacion = Column(TIMESTAMP, server_default=func.now())
 	
 	establishment = relationship("Establishment", back_populates="workers")
-	user = relationship("User", back_populates="worker_profile")
+	user = relationship("User", back_populates="worker_profiles")

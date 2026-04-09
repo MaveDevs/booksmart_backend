@@ -39,6 +39,12 @@ def _user_can_access_appointment(db: Session, user: User, appointment) -> bool:
             if establishment and establishment.usuario_id == user.usuario_id:
                 return True
     
+    # Worker can access appointments assigned to them
+    from app.crud import crud_workers
+    worker = crud_workers.get_worker_by_user(db, user.usuario_id)
+    if worker and appointment.trabajador_id == worker.trabajador_id:
+        return True
+    
     return False
 
 
@@ -46,6 +52,7 @@ def _user_can_access_appointment(db: Session, user: User, appointment) -> bool:
 def get_appointments(
     cliente_id: Optional[int] = Query(None),
     servicio_id: Optional[int] = Query(None),
+    trabajador_id: Optional[int] = Query(None),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(deps.get_db),
@@ -62,13 +69,13 @@ def get_appointments(
     # Admin can see all
     if user_role == RoleType.ADMIN.value:
         return crud_appointments.get_appointments(
-            db, skip=skip, limit=limit, cliente_id=cliente_id, servicio_id=servicio_id
+            db, skip=skip, limit=limit, cliente_id=cliente_id, servicio_id=servicio_id, trabajador_id=trabajador_id
         )
     
     # Clients can only see their own appointments
     if user_role == RoleType.CLIENTE.value:
         return crud_appointments.get_appointments(
-            db, skip=skip, limit=limit, cliente_id=current_user.usuario_id, servicio_id=servicio_id
+            db, skip=skip, limit=limit, cliente_id=current_user.usuario_id, servicio_id=servicio_id, trabajador_id=trabajador_id
         )
     
     # Owners: if servicio_id given, verify they own it; otherwise get appointments for their establishments
@@ -91,6 +98,16 @@ def get_appointments(
                 appts = crud_appointments.get_appointments(db, servicio_id=svc.servicio_id)
                 all_appointments.extend(appts)
         return all_appointments[skip:skip + limit]
+    
+    # Workers: can only see appointments assigned to them
+    if user_role == RoleType.TRABAJADOR.value:
+        from app.crud import crud_workers
+        worker = crud_workers.get_worker_by_user(db, current_user.usuario_id)
+        if not worker:
+            return []
+        return crud_appointments.get_appointments(
+            db, skip=skip, limit=limit, trabajador_id=worker.trabajador_id
+        )
     
     return []
 

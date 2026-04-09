@@ -18,7 +18,7 @@ class WorkerBase(BaseModel):
 
 
 class WorkerCreate(WorkerBase):
-    pass
+    contrasena: Optional[str] = None
 
 
 class WorkerUpdate(BaseModel):
@@ -31,6 +31,7 @@ class WorkerUpdate(BaseModel):
     descripcion: Optional[str] = None
     activo: Optional[bool] = None
     fecha_contratacion: Optional[date] = None
+    contrasena: Optional[str] = None
 
 
 class WorkerResponse(WorkerBase):

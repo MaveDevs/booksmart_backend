@@ -40,6 +40,12 @@ def _user_can_access_appointment_messages(db: Session, user: User, cita_id: int)
             if establishment and establishment.usuario_id == user.usuario_id:
                 return True
     
+    # Worker can access messages for their assigned appointments
+    from app.crud import crud_workers
+    worker = crud_workers.get_worker_by_user(db, user.usuario_id)
+    if worker and appointment.trabajador_id == worker.trabajador_id:
+        return True
+    
     return False
 
 

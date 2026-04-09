@@ -16,6 +16,10 @@ def get_workers(db: Session, skip: int = 0, limit: int = 100) -> List[Worker]:
 	return db.query(Worker).offset(skip).limit(limit).all()
 
 
+def get_worker_by_user(db: Session, user_id: int) -> Optional[Worker]:
+	return db.query(Worker).filter(Worker.usuario_id == user_id).first()
+
+
 def get_workers_by_establishment(
 	db: Session, establishment_id: int, skip: int = 0, limit: int = 100
 ) -> List[Worker]:
@@ -40,21 +44,25 @@ def create_worker(db: Session, worker: WorkerCreate) -> Worker:
 	
 	usuario_id = None
 	if worker.email:
+		worker.email = worker.email.strip().lower()
 		existing_user = get_user_by_email(db, worker.email)
-		if existing_user:
-			raise ValueError("Un usuario con este correo ya existe en el sistema.")
 		
-		new_user = User(
-			nombre=worker.nombre,
-			apellido=worker.apellido,
-			correo=worker.email,
-			contrasena_hash=get_password_hash("WorkerTemp123!"),
-			rol_id=4,
-			activo=True,
-		)
-		db.add(new_user)
-		db.flush()
-		usuario_id = new_user.usuario_id
+		if existing_user:
+			# If user exists, we just link them
+			usuario_id = existing_user.usuario_id
+		else:
+			# If not, create a new user account
+			new_user = User(
+				nombre=worker.nombre,
+				apellido=worker.apellido,
+				correo=worker.email,
+				contrasena_hash=get_password_hash(worker.contrasena or "WorkerTemp123!"),
+				rol_id=4,
+				activo=True,
+			)
+			db.add(new_user)
+			db.flush()
+			usuario_id = new_user.usuario_id
 
 	db_worker = Worker(**worker.model_dump())
 	if usuario_id:
@@ -72,6 +80,35 @@ def update_worker(db: Session, worker_id: int, worker: WorkerUpdate) -> Optional
 		return None
 	
 	update_data = worker.model_dump(exclude_unset=True)
+	
+	# If email is being updated, also update the linked user
+	if "email" in update_data and update_data["email"] != db_worker.email:
+		update_data["email"] = update_data["email"].strip().lower()
+		new_email = update_data["email"]
+		# Check if new email already exists in system for another user
+		from app.crud.crud_users import get_user_by_email
+		existing_user = get_user_by_email(db, new_email)
+		if existing_user and (not db_worker.usuario_id or existing_user.usuario_id != db_worker.usuario_id):
+			raise ValueError("Este correo ya está en uso por otro usuario.")
+		
+		# Update the linked user if it exists
+		if db_worker.usuario_id:
+			from app.models import User
+			db_user = db.query(User).filter(User.usuario_id == db_worker.usuario_id).first()
+			if db_user:
+				db_user.correo = new_email
+	
+	
+	# Handle password update
+	if "contrasena" in update_data and update_data["contrasena"]:
+		if db_worker.usuario_id:
+			from app.models import User
+			from app.core.security import get_password_hash
+			db_user = db.query(User).filter(User.usuario_id == db_worker.usuario_id).first()
+			if db_user:
+				db_user.contrasena_hash = get_password_hash(update_data["contrasena"])
+		update_data.pop("contrasena") # Remove from worker table update
+	
 	for field, value in update_data.items():
 		setattr(db_worker, field, value)
 	

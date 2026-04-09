@@ -24,12 +24,22 @@ def get_establishments(db: Session, skip: int = 0, limit: int = 100) -> List[Est
 def get_establishments_by_user(
     db: Session, user_id: int, skip: int = 0, limit: int = 100
 ) -> List[Establishment]:
+    from app.models.workers import Worker
+    
+    # IDs of establishments where the user is a registered worker
+    worker_establishment_ids = (
+        db.query(Worker.establecimiento_id)
+        .filter(Worker.usuario_id == user_id)
+    )
+    
+    # Query establishments owned by user OR where the user is a worker
     return (
         db.query(Establishment)
-        .filter(Establishment.usuario_id == user_id)
-        .offset(skip)
-        .limit(limit)
-        .all()
+        .filter(
+            (Establishment.usuario_id == user_id) | 
+            (Establishment.establecimiento_id.in_(worker_establishment_ids))
+        )
+        .offset(skip).limit(limit).all()
     )
 
 

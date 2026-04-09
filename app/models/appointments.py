@@ -20,6 +20,7 @@ class Appointment(Base):
 	cita_id = Column(Integer, primary_key=True, autoincrement=True)
 	cliente_id = Column(Integer, ForeignKey("usuario.usuario_id", ondelete="CASCADE"), nullable=False)
 	servicio_id = Column(Integer, ForeignKey("servicio.servicio_id", ondelete="CASCADE"), nullable=False)
+	trabajador_id = Column(Integer, ForeignKey("trabajador.trabajador_id", ondelete="SET NULL"), nullable=True)
 	fecha = Column(Date, nullable=False)
 	hora_inicio = Column(Time, nullable=False)
 	hora_fin = Column(Time, nullable=False)
@@ -28,5 +29,6 @@ class Appointment(Base):
 
 	client = relationship("User", foreign_keys=[cliente_id], back_populates="appointments")
 	service = relationship("Service", back_populates="appointments")
+	worker = relationship("Worker")
 	messages = relationship("Message", back_populates="appointment")
 

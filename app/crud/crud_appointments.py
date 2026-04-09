@@ -16,12 +16,15 @@ def get_appointments(
     limit: int = 100,
     cliente_id: Optional[int] = None,
     servicio_id: Optional[int] = None,
+    trabajador_id: Optional[int] = None,
 ) -> List[Appointment]:
     query = db.query(Appointment)
     if cliente_id is not None:
         query = query.filter(Appointment.cliente_id == cliente_id)
     if servicio_id is not None:
         query = query.filter(Appointment.servicio_id == servicio_id)
+    if trabajador_id is not None:
+        query = query.filter(Appointment.trabajador_id == trabajador_id)
     return query.offset(skip).limit(limit).all()
 
 

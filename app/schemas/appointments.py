@@ -15,6 +15,7 @@ class AppointmentStatus(str, enum.Enum):
 class AppointmentBase(BaseModel):
 	cliente_id: int
 	servicio_id: int
+	trabajador_id: Optional[int] = None
 	fecha: date
 	hora_inicio: time
 	hora_fin: time
@@ -34,6 +35,7 @@ class AppointmentCreate(AppointmentBase):
 class AppointmentUpdate(BaseModel):
 	cliente_id: Optional[int] = None
 	servicio_id: Optional[int] = None
+	trabajador_id: Optional[int] = None
 	fecha: Optional[date] = None
 	hora_inicio: Optional[time] = None
 	hora_fin: Optional[time] = None
