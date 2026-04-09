@@ -32,3 +32,19 @@ class Appointment(Base):
 	worker = relationship("Worker")
 	messages = relationship("Message", back_populates="appointment")
 
+	# Propiedades calculadas para facilitar la vida al esquema Pydantic
+	@property
+	def cliente_nombre(self):
+		return self.client.nombre if self.client else None
+
+	@property
+	def cliente_apellido(self):
+		return self.client.apellido if self.client else None
+
+	@property
+	def trabajador_nombre(self):
+		return self.worker.nombre if self.worker else None
+
+	@property
+	def trabajador_apellido(self):
+		return self.worker.apellido if self.worker else None

@@ -52,6 +52,12 @@ class AppointmentUpdate(BaseModel):
 class AppointmentResponse(AppointmentBase):
 	cita_id: int
 	fecha_creacion: datetime
+	
+	# Campos enriquecidos para la UI
+	cliente_nombre: Optional[str] = None
+	cliente_apellido: Optional[str] = None
+	trabajador_nombre: Optional[str] = None
+	trabajador_apellido: Optional[str] = None
 
 	class Config:
 		from_attributes = True
