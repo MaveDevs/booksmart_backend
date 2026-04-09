@@ -53,6 +53,7 @@ def get_appointments(
     cliente_id: Optional[int] = Query(None),
     servicio_id: Optional[int] = Query(None),
     trabajador_id: Optional[int] = Query(None),
+    establishment_id: Optional[int] = Query(None),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(deps.get_db),
@@ -69,17 +70,34 @@ def get_appointments(
     # Admin can see all
     if user_role == RoleType.ADMIN.value:
         return crud_appointments.get_appointments(
-            db, skip=skip, limit=limit, cliente_id=cliente_id, servicio_id=servicio_id, trabajador_id=trabajador_id
+            db, skip=skip, limit=limit, cliente_id=cliente_id, servicio_id=servicio_id, trabajador_id=trabajador_id, establishment_id=establishment_id
         )
     
     # Clients can only see their own appointments
     if user_role == RoleType.CLIENTE.value:
         return crud_appointments.get_appointments(
-            db, skip=skip, limit=limit, cliente_id=current_user.usuario_id, servicio_id=servicio_id, trabajador_id=trabajador_id
+            db, skip=skip, limit=limit, cliente_id=current_user.usuario_id, servicio_id=servicio_id, trabajador_id=trabajador_id, establishment_id=establishment_id
         )
     
-    # Owners: if servicio_id given, verify they own it; otherwise get appointments for their establishments
+    # Owners: if establishment_id given, verify they own it
     if user_role == RoleType.DUENO.value:
+        if establishment_id:
+            # Check if owner owns this specific establishment
+            est = crud_establishments.get_establishment(db, establishment_id)
+            if not est or est.usuario_id != current_user.usuario_id:
+                raise HTTPException(status_code=403, detail="You do not own this establishment")
+            
+            return crud_appointments.get_appointments(
+                db, 
+                skip=skip, 
+                limit=limit, 
+                cliente_id=cliente_id,
+                servicio_id=servicio_id, 
+                trabajador_id=trabajador_id,
+                establishment_id=establishment_id
+            )
+
+        # Legacy behavior: if no establishment_id, get it for all their establishments
         if servicio_id:
             service = crud_services.get_service(db, servicio_id)
             if service:
@@ -89,14 +107,13 @@ def get_appointments(
             return crud_appointments.get_appointments(
                 db, skip=skip, limit=limit, servicio_id=servicio_id
             )
-        # Get all appointments for owner's establishments
+            
+        # Get all appointments for all owner's establishments
         establishments = crud_establishments.get_establishments_by_user(db, current_user.usuario_id)
         all_appointments = []
         for est in establishments:
-            services = crud_services.get_services_by_establishment(db, est.establecimiento_id)
-            for svc in services:
-                appts = crud_appointments.get_appointments(db, servicio_id=svc.servicio_id)
-                all_appointments.extend(appts)
+            appts = crud_appointments.get_appointments(db, establishment_id=est.establecimiento_id)
+            all_appointments.extend(appts)
         return all_appointments[skip:skip + limit]
     
     # Workers: can only see appointments assigned to them
@@ -106,7 +123,7 @@ def get_appointments(
         if not worker:
             return []
         return crud_appointments.get_appointments(
-            db, skip=skip, limit=limit, trabajador_id=worker.trabajador_id
+            db, skip=skip, limit=limit, trabajador_id=worker.trabajador_id, establishment_id=establishment_id
         )
     
     return []
