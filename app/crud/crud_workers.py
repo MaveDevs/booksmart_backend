@@ -52,11 +52,14 @@ def create_worker(db: Session, worker: WorkerCreate) -> Worker:
 			usuario_id = existing_user.usuario_id
 		else:
 			# If not, create a new user account
+			# Determine password
+			raw_password = worker.contrasena.strip() if (worker.contrasena and worker.contrasena.strip()) else "WorkerTemp123!"
+			
 			new_user = User(
 				nombre=worker.nombre,
 				apellido=worker.apellido,
 				correo=worker.email,
-				contrasena_hash=get_password_hash(worker.contrasena or "WorkerTemp123!"),
+				contrasena_hash=get_password_hash(raw_password),
 				rol_id=4,
 				activo=True,
 			)
@@ -105,8 +108,8 @@ def update_worker(db: Session, worker_id: int, worker: WorkerUpdate) -> Optional
 			from app.models import User
 			from app.core.security import get_password_hash
 			db_user = db.query(User).filter(User.usuario_id == db_worker.usuario_id).first()
-			if db_user:
-				db_user.contrasena_hash = get_password_hash(update_data["contrasena"])
+			if db_user and update_data["contrasena"].strip():
+				db_user.contrasena_hash = get_password_hash(update_data["contrasena"].strip())
 		update_data.pop("contrasena") # Remove from worker table update
 	
 	for field, value in update_data.items():

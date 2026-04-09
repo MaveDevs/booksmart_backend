@@ -24,20 +24,24 @@ def get_establishments(db: Session, skip: int = 0, limit: int = 100) -> List[Est
 def get_establishments_by_user(
     db: Session, user_id: int, skip: int = 0, limit: int = 100
 ) -> List[Establishment]:
+    # 1. Get current user's email for fallback
+    user = db.query(User).filter(User.usuario_id == user_id).first()
+    user_email = user.correo if user else None
+
     from app.models.workers import Worker
     
-    # IDs of establishments where the user is a registered worker
-    worker_establishment_ids = (
-        db.query(Worker.establecimiento_id)
-        .filter(Worker.usuario_id == user_id)
+    # 2. Find establishments where user is a worker (by ID OR by Email fallback)
+    worker_establishments = db.query(Worker.establecimiento_id).filter(
+        (Worker.usuario_id == user_id) |
+        (Worker.email.ilike(user_email) if user_email else False)
     )
     
-    # Query establishments owned by user OR where the user is a worker
+    # 3. Final query: Owned by user OR in worker membership
     return (
         db.query(Establishment)
         .filter(
             (Establishment.usuario_id == user_id) | 
-            (Establishment.establecimiento_id.in_(worker_establishment_ids))
+            (Establishment.establecimiento_id.in_(worker_establishments))
         )
         .offset(skip).limit(limit).all()
     )
