@@ -20,6 +20,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.crud.crud_auto_notifications import create_auto_notification
+from app.crud import crud_notifications
 from app.crud.crud_appointments import get_appointment
 from app.crud.crud_messages import get_message
 from app.core.feature_gating import establishment_has_feature
@@ -27,8 +28,11 @@ from app.models.auto_notifications import (
     AutoNotificationType,
     NotificationChannel,
 )
+from app.models.establishments import Establishment
 from app.models.plan_features import FeatureKey
 from app.schemas.auto_notifications import AutoNotificationCreate
+from app.schemas.notifications import NotificationCreate, NotificationType
+from app.services.realtime import notify_new_message, notify_user
 
 
 class NotificationOrchestrator:
@@ -193,13 +197,42 @@ class NotificationOrchestrator:
         if not message or not message.appointment:
             return
 
-        # Determine recipient (opposite of sender)
         appointment = message.appointment
-        recipient_id = (
-            appointment.cliente_id
-            if message.emisor_id != appointment.cliente_id
-            else message.emisor_id
+
+        # Determine recipient (client <-> worker/owner)
+        if message.emisor_id == appointment.cliente_id:
+            recipient_id = None
+            if appointment.worker and appointment.worker.usuario_id:
+                recipient_id = appointment.worker.usuario_id
+            else:
+                establishment = (
+                    db.query(Establishment)
+                    .filter(Establishment.establecimiento_id == establishment_id)
+                    .first()
+                )
+                if establishment:
+                    recipient_id = establishment.usuario_id
+        else:
+            recipient_id = appointment.cliente_id
+
+        if not recipient_id or recipient_id == message.emisor_id:
+            return
+
+        content = (message.contenido or "").strip()
+        preview = content[:100]
+        if len(content) > 100:
+            preview = f"{preview}..."
+
+        in_app_notification = crud_notifications.create_notification(
+            db,
+            NotificationCreate(
+                usuario_id=recipient_id,
+                mensaje=f"Tienes un nuevo mensaje: {preview}",
+                tipo=NotificationType.INFO,
+                leida=False,
+            ),
         )
+        await notify_user(recipient_id, in_app_notification)
 
         notif = AutoNotificationCreate(
             usuario_id=recipient_id,
@@ -209,11 +242,13 @@ class NotificationOrchestrator:
             tipo=AutoNotificationType.MESSAGE_RECEIVED,
             canal=NotificationChannel.PUSH,
             titulo="Nuevo mensaje",
-            mensaje=f"Tienes un nuevo mensaje: {message.contenido[:100]}...",
+            mensaje=f"Tienes un nuevo mensaje: {preview}",
             fecha_programada=datetime.utcnow(),
             url_accion=f"/app/appointments/{appointment.cita_id}",
         )
         create_auto_notification(db, notif)
+
+        await notify_new_message(recipient_id, message)
 
     def _run_sync(self, coro) -> None:
         """Run coroutine from sync contexts, including AnyIO worker threads."""
