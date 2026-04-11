@@ -102,15 +102,27 @@ class NotificationOrchestrator:
         if not appointment:
             return
 
-        # Immediate in-app notification
+        message = "El negocio ha confirmado tu cita. ¡Gracias por tu reserva!"
+
+        in_app_notification = crud_notifications.create_notification(
+            db,
+            NotificationCreate(
+                usuario_id=appointment.cliente_id,
+                mensaje=message,
+                tipo=NotificationType.INFO,
+                leida=False,
+            ),
+        )
+        await notify_user(appointment.cliente_id, in_app_notification)
+
         notif = AutoNotificationCreate(
             usuario_id=appointment.cliente_id,
             cita_id=appointment_id,
             establecimiento_id=establishment_id,
             tipo=AutoNotificationType.APPOINTMENT_CONFIRMATION,
-            canal=NotificationChannel.IN_APP,
+            canal=NotificationChannel.PUSH,
             titulo="Tu cita ha sido confirmada",
-            mensaje="El negocio ha confirmado tu cita. ¡Gracias por tu reserva!",
+            mensaje=message,
             fecha_programada=datetime.utcnow(),
             url_accion="/app/appointments",
         )
@@ -127,15 +139,27 @@ class NotificationOrchestrator:
         if not appointment:
             return
 
-        # Cancellation notification
+        message = reason or "Tu cita ha sido cancelada. Contáctanos si tienes preguntas."
+
+        in_app_notification = crud_notifications.create_notification(
+            db,
+            NotificationCreate(
+                usuario_id=appointment.cliente_id,
+                mensaje=message,
+                tipo=NotificationType.ALERTA,
+                leida=False,
+            ),
+        )
+        await notify_user(appointment.cliente_id, in_app_notification)
+
         notif = AutoNotificationCreate(
             usuario_id=appointment.cliente_id,
             cita_id=appointment_id,
             establecimiento_id=establishment_id,
             tipo=AutoNotificationType.APPOINTMENT_CANCELLATION,
-            canal=NotificationChannel.IN_APP,
+            canal=NotificationChannel.PUSH,
             titulo="Tu cita ha sido cancelada",
-            mensaje=reason or "Tu cita ha sido cancelada. Contáctanos si tienes preguntas.",
+            mensaje=message,
             fecha_programada=datetime.utcnow(),
         )
         create_auto_notification(db, notif)
