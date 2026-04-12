@@ -23,5 +23,6 @@ class Establishment(Base):
     workers = relationship("Worker", back_populates="establishment")
 
     agendas = relationship("Agenda", back_populates="establishment")
+    special_closures = relationship("SpecialClosure", back_populates="establishment", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="establishment")
     reports = relationship("Report", back_populates="establishment")

@@ -73,6 +73,11 @@ Nota: en backend actual no existe `/establishments/me` ni `/profiles/me`.
 - `PUT/PATCH /api/v1/agendas/{agenda_id}`
 - `DELETE /api/v1/agendas/{agenda_id}`
 
+Nota de negocio:
+- El horario semanal sigue siendo la base de disponibilidad.
+- Para feriados, eventos o días no laborables, el backend expone cierres especiales por fecha.
+- Esos cierres no reemplazan el horario semanal; solo bloquean la disponibilidad en fechas puntuales.
+
 ### 3.5 Citas (core operativo)
 
 - `GET /api/v1/appointments` con filtros (`servicio_id`, etc).
@@ -84,6 +89,24 @@ Nota: en backend actual no existe `/establishments/me` ni `/profiles/me`.
 Slot discovery para UI:
 
 - `GET /api/v1/appointments/availability/slots?servicio_id={id}&target_date=YYYY-MM-DD`
+
+Respuesta ampliada recomendada:
+
+```json
+{
+	"date": "2026-04-12",
+	"servicio_id": 10,
+	"available_slots": ["09:00", "10:00"],
+	"busy_slots": ["11:00"],
+	"closed": false,
+	"closure_reason": null
+}
+```
+
+Comportamiento esperado en frontend:
+- Si `closed` es `true`, no permitir reserva.
+- Si `closure_reason` existe, mostrar el motivo del cierre.
+- Si el cliente ignora los campos nuevos, la integracion sigue funcionando igual.
 
 ### 3.6 Mensajeria en cita
 

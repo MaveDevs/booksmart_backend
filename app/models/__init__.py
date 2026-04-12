@@ -7,6 +7,7 @@ from .ratings import Review
 
 from .services import Service
 from .agendas import Agenda
+from .special_closures import SpecialClosure
 from .appointments import Appointment
 from .messages import Message
 from .workers import Worker

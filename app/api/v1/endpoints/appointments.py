@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.crud import crud_appointments, crud_services, crud_establishments
+from app.crud import crud_appointments, crud_services, crud_establishments, crud_special_closures
 from app.models import User
 from app.schemas.appointments import AppointmentCreate, AppointmentResponse, AppointmentUpdate
 from app.core.permissions import (
@@ -275,6 +275,28 @@ def get_available_slots(
     Mobile/Web: Get available time slots for a specific service on a specific date.
     Note: Basic logic. In production, this computes existing Citas vs Agenda.
     """
+    service = crud_services.get_service(db, servicio_id)
+    if service is None:
+        return {
+            "date": target_date.strftime("%Y-%m-%d"),
+            "servicio_id": servicio_id,
+            "available_slots": [],
+            "busy_slots": [],
+            "closed": True,
+            "closure_reason": "Servicio no encontrado",
+        }
+
+    matching_closure = crud_special_closures.get_closure_by_date(db, service.establecimiento_id, target_date)
+    if matching_closure:
+        return {
+            "date": target_date.strftime("%Y-%m-%d"),
+            "servicio_id": servicio_id,
+            "available_slots": [],
+            "busy_slots": [],
+            "closed": True,
+            "closure_reason": matching_closure.motivo or "Cerrado por feriado",
+        }
+
     # 1. Simulate pulling the business Agenda (e.g. 09:00 to 18:00)
     # 2. Simulate pulling the service duration (e.g. 1 hour)
     # 3. Pull all CONFIRMADA appointments for that day and service.
@@ -292,7 +314,9 @@ def get_available_slots(
         "date": target_date.strftime("%Y-%m-%d"),
         "servicio_id": servicio_id,
         "available_slots": available_slots,
-        "busy_slots": busy_times
+        "busy_slots": busy_times,
+        "closed": False,
+        "closure_reason": None,
     }
 
 
