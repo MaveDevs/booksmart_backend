@@ -42,6 +42,18 @@ def get_worker(
 	return worker
 
 
+@router.get("/me", response_model=WorkerResponse)
+def get_my_worker_profile(
+	db: Session = Depends(deps.get_db),
+	current_user: User = Depends(deps.get_current_user),
+):
+	"""Get worker profile linked to the authenticated user."""
+	worker = crud_workers.get_worker_by_user(db, current_user.usuario_id)
+	if not worker:
+		raise HTTPException(status_code=404, detail="Worker profile not found for current user")
+	return worker
+
+
 @router.post("/", response_model=WorkerResponse)
 def create_worker(
 	worker: WorkerCreate,
