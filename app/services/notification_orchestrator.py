@@ -15,7 +15,7 @@ Usage example:
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,7 @@ from app.models.auto_notifications import (
     NotificationChannel,
 )
 from app.models.establishments import Establishment
+from app.models.services import Service
 from app.models.plan_features import FeatureKey
 from app.schemas.auto_notifications import AutoNotificationCreate
 from app.schemas.notifications import NotificationCreate, NotificationType
@@ -40,6 +41,69 @@ class NotificationOrchestrator:
     Orchestrates automatic notification creation based on business events.
     All methods are safe to call even if features are not enabled (they will no-op).
     """
+
+    def _get_appointment_context(
+        self, db: Session, appointment, establishment_id: int
+    ) -> tuple[str, str]:
+        """Resolve business and service names for appointment notifications."""
+        service_name = getattr(appointment, "servicio_nombre", None)
+        business_name = None
+
+        service = getattr(appointment, "service", None)
+        if service:
+            service_name = service_name or getattr(service, "nombre", None)
+            establishment = getattr(service, "establishment", None)
+            if establishment:
+                business_name = getattr(establishment, "nombre", None)
+
+        if not service_name and getattr(appointment, "servicio_id", None) is not None:
+            service = db.query(Service).filter(Service.servicio_id == appointment.servicio_id).first()
+            if service:
+                service_name = getattr(service, "nombre", None)
+                establishment = getattr(service, "establishment", None)
+                if establishment:
+                    business_name = business_name or getattr(establishment, "nombre", None)
+
+        if not business_name and establishment_id is not None:
+            establishment = (
+                db.query(Establishment)
+                .filter(Establishment.establecimiento_id == establishment_id)
+                .first()
+            )
+            if establishment:
+                business_name = getattr(establishment, "nombre", None)
+
+        return business_name or "tu negocio", service_name or "tu servicio"
+
+    def _format_appointment_label(self, appointment) -> str:
+        fecha = getattr(appointment, "fecha", None)
+        hora_inicio = getattr(appointment, "hora_inicio", None)
+
+        if fecha is None or hora_inicio is None:
+            return "en la fecha programada"
+
+        return f"el {fecha.strftime('%d/%m/%Y')} a las {hora_inicio.strftime('%H:%M')}"
+
+    def _build_appointment_message(self, db: Session, appointment, establishment_id: int, action: str, reason: Optional[str] = None) -> str:
+        business_name, service_name = self._get_appointment_context(db, appointment, establishment_id)
+        appointment_label = self._format_appointment_label(appointment)
+
+        base_message = (
+            f"Tu cita en {business_name} para el servicio {service_name} {appointment_label}"
+        )
+
+        if action == "created":
+            return f"{base_message} fue registrada correctamente."
+        if action == "confirmed":
+            return f"{base_message} fue confirmada."
+        if action == "cancelled":
+            if reason:
+                return f"{base_message} fue cancelada. Motivo: {reason}"
+            return f"{base_message} fue cancelada."
+        if action == "completed":
+            return f"{base_message} fue marcada como completada."
+
+        return base_message
 
     async def on_appointment_created(
         self, db: Session, appointment_id: int, establishment_id: int
@@ -55,6 +119,7 @@ class NotificationOrchestrator:
         appointment = get_appointment(db, appointment_id)
         if not appointment:
             return
+        appointment = cast(Any, appointment)
 
         # Schedule reminders: T-24h and T-2h before appointment
         appointment_datetime = datetime.combine(appointment.fecha, appointment.hora_inicio)
@@ -72,6 +137,7 @@ class NotificationOrchestrator:
                 mensaje=f"Tu cita está programada para mañana a las {appointment.hora_inicio.strftime('%H:%M')}",
                 fecha_programada=reminder_24h,
                 url_accion="/app/appointments",
+                metadata=None,
             )
             create_auto_notification(db, notif_24h)
 
@@ -88,6 +154,7 @@ class NotificationOrchestrator:
                 mensaje=f"Tu cita comienza a las {appointment.hora_inicio.strftime('%H:%M')}",
                 fecha_programada=reminder_2h,
                 url_accion="/app/appointments",
+                metadata=None,
             )
             create_auto_notification(db, notif_2h)
 
@@ -101,15 +168,16 @@ class NotificationOrchestrator:
         appointment = get_appointment(db, appointment_id)
         if not appointment:
             return
+        appointment = cast(Any, appointment)
 
-        message = "El negocio ha confirmado tu cita. ¡Gracias por tu reserva!"
+        message = self._build_appointment_message(db, appointment, establishment_id, "confirmed")
 
         in_app_notification = crud_notifications.create_notification(
             db,
             NotificationCreate(
                 usuario_id=appointment.cliente_id,
                 mensaje=message,
-                tipo=NotificationType.INFO,
+                tipo=NotificationType.ALERTA,
                 leida=False,
             ),
         )
@@ -125,6 +193,7 @@ class NotificationOrchestrator:
             mensaje=message,
             fecha_programada=datetime.utcnow(),
             url_accion="/app/appointments",
+            metadata=None,
         )
         create_auto_notification(db, notif)
 
@@ -138,8 +207,15 @@ class NotificationOrchestrator:
         appointment = get_appointment(db, appointment_id)
         if not appointment:
             return
+        appointment = cast(Any, appointment)
 
-        message = reason or "Tu cita ha sido cancelada. Contáctanos si tienes preguntas."
+        message = self._build_appointment_message(
+            db,
+            appointment,
+            establishment_id,
+            "cancelled",
+            reason=reason,
+        )
 
         in_app_notification = crud_notifications.create_notification(
             db,
@@ -161,6 +237,8 @@ class NotificationOrchestrator:
             titulo="Tu cita ha sido cancelada",
             mensaje=message,
             fecha_programada=datetime.utcnow(),
+            url_accion=None,
+            metadata=None,
         )
         create_auto_notification(db, notif)
 
@@ -176,6 +254,7 @@ class NotificationOrchestrator:
                 mensaje="Reserva tu próxima cita y obtén 20% de descuento como disculpa.",
                 fecha_programada=datetime.utcnow() + timedelta(minutes=5),
                 url_accion="/app/appointments",
+                metadata=None,
             )
             create_auto_notification(db, recovery_notif)
 
@@ -195,6 +274,20 @@ class NotificationOrchestrator:
         appointment = get_appointment(db, appointment_id)
         if not appointment:
             return
+        appointment = cast(Any, appointment)
+
+        message = self._build_appointment_message(db, appointment, establishment_id, "completed")
+
+        in_app_notification = crud_notifications.create_notification(
+            db,
+            NotificationCreate(
+                usuario_id=appointment.cliente_id,
+                mensaje=message,
+                tipo=NotificationType.ALERTA,
+                leida=False,
+            ),
+        )
+        await notify_user(appointment.cliente_id, in_app_notification)
 
         # Schedule review request 1 hour after appointment
         review_request = AutoNotificationCreate(
@@ -204,9 +297,10 @@ class NotificationOrchestrator:
             tipo=AutoNotificationType.REVIEW_REQUEST,
             canal=NotificationChannel.IN_APP,
             titulo="¿Cómo fue tu experiencia?",
-            mensaje="Tu cita ha terminado. ¡Cuéntanos cómo fue!",
+            mensaje=message,
             fecha_programada=datetime.utcnow() + timedelta(hours=1),
             url_accion="/app/ratings",
+            metadata=None,
         )
         create_auto_notification(db, review_request)
 
@@ -221,7 +315,8 @@ class NotificationOrchestrator:
         if not message or not message.appointment:
             return
 
-        appointment = message.appointment
+        message = cast(Any, message)
+        appointment = cast(Any, message.appointment)
 
         # Determine recipient (client <-> worker/owner)
         if message.emisor_id == appointment.cliente_id:
@@ -239,19 +334,25 @@ class NotificationOrchestrator:
         else:
             recipient_id = appointment.cliente_id
 
-        if not recipient_id or recipient_id == message.emisor_id:
+        recipient_id = cast(Optional[int], recipient_id)
+        if recipient_id is None or recipient_id == message.emisor_id:
             return
 
+        business_name, service_name = self._get_appointment_context(db, appointment, establishment_id)
         content = (message.contenido or "").strip()
         preview = content[:100]
         if len(content) > 100:
             preview = f"{preview}..."
 
+        notification_message = (
+            f"Nuevo mensaje sobre tu cita en {business_name} para el servicio {service_name}: {preview}"
+        )
+
         in_app_notification = crud_notifications.create_notification(
             db,
             NotificationCreate(
                 usuario_id=recipient_id,
-                mensaje=f"Tienes un nuevo mensaje: {preview}",
+                mensaje=notification_message,
                 tipo=NotificationType.INFO,
                 leida=False,
             ),
@@ -266,9 +367,10 @@ class NotificationOrchestrator:
             tipo=AutoNotificationType.MESSAGE_RECEIVED,
             canal=NotificationChannel.PUSH,
             titulo="Nuevo mensaje",
-            mensaje=f"Tienes un nuevo mensaje: {preview}",
+            mensaje=notification_message,
             fecha_programada=datetime.utcnow(),
             url_accion=f"/app/appointments/{appointment.cita_id}",
+            metadata=None,
         )
         create_auto_notification(db, notif)
 
