@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Dict
 
@@ -14,6 +15,7 @@ from app.models.auto_notifications import (
     AutoNotificationType,
     NotificationChannel,
 )
+from app.models.notifications import Notification
 from app.models.notifications import NotificationType
 from app.services.push_sender import send_push
 
@@ -28,7 +30,10 @@ def _map_notification_type(auto_type: AutoNotificationType) -> NotificationType:
         return NotificationType.RECORDATORIO
 
     if auto_type in (
+        AutoNotificationType.APPOINTMENT_CONFIRMATION,
+        AutoNotificationType.APPOINTMENT_COMPLETION,
         AutoNotificationType.APPOINTMENT_CANCELLATION,
+        AutoNotificationType.RECOVERY_OFFER,
         AutoNotificationType.PAYMENT_FAILED,
     ):
         return NotificationType.ALERTA
@@ -36,14 +41,30 @@ def _map_notification_type(auto_type: AutoNotificationType) -> NotificationType:
     return NotificationType.INFO
 
 
-def _create_in_app_notification(db, notification: AutoNotification) -> None:
-    in_app = Notification(
+def _should_skip_endpoint_entry(notification: AutoNotification) -> bool:
+    metadata_value = getattr(notification, "metadata_json", None)
+    if not metadata_value:
+        return False
+
+    try:
+        metadata = json.loads(metadata_value)
+    except (TypeError, json.JSONDecodeError):
+        return False
+
+    return bool(metadata.get("mirror_to_notifications"))
+
+
+def _create_endpoint_notification(db, notification: AutoNotification) -> None:
+    if _should_skip_endpoint_entry(notification):
+        return
+
+    endpoint_notification = Notification(
         usuario_id=notification.usuario_id,
         mensaje=notification.mensaje,
         tipo=_map_notification_type(notification.tipo),
         leida=False,
     )
-    db.add(in_app)
+    db.add(endpoint_notification)
     db.commit()
 
 
@@ -87,10 +108,11 @@ def _deliver_push_notification(db, notification: AutoNotification) -> bool:
 
 
 def _deliver_notification(db, notification: AutoNotification) -> bool:
+    _create_endpoint_notification(db, notification)
+
     channel = notification.canal
 
     if channel == NotificationChannel.IN_APP:
-        _create_in_app_notification(db, notification)
         crud_auto_notifications.mark_sent(db, notification.notif_auto_id)
         return True
 
