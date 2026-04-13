@@ -13,6 +13,7 @@ Usage example:
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional, cast
@@ -193,7 +194,7 @@ class NotificationOrchestrator:
             mensaje=message,
             fecha_programada=datetime.utcnow(),
             url_accion="/app/appointments",
-            metadata=None,
+                metadata=json.dumps({"mirror_to_notifications": True, "source": "appointment_update"}),
         )
         create_auto_notification(db, notif)
 
@@ -238,7 +239,7 @@ class NotificationOrchestrator:
             mensaje=message,
             fecha_programada=datetime.utcnow(),
             url_accion=None,
-            metadata=None,
+            metadata=json.dumps({"mirror_to_notifications": True, "source": "appointment_update"}),
         )
         create_auto_notification(db, notif)
 
@@ -370,7 +371,7 @@ class NotificationOrchestrator:
             mensaje=notification_message,
             fecha_programada=datetime.utcnow(),
             url_accion=f"/app/appointments/{appointment.cita_id}",
-            metadata=None,
+            metadata=json.dumps({"mirror_to_notifications": True, "source": "message_update"}),
         )
         create_auto_notification(db, notif)
 
