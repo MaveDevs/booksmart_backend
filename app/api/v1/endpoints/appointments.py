@@ -262,7 +262,12 @@ def decline_appointment(
         raise HTTPException(status_code=403, detail="You do not own the establishment for this appointment")
     
     update_data = AppointmentUpdate(estado="CANCELADA")
-    return crud_appointments.update_appointment(db, appointment_id, update_data)
+    return crud_appointments.update_appointment(
+        db,
+        appointment_id,
+        update_data,
+        notification_event="rejected",
+    )
 
 
 @router.get("/availability/slots")

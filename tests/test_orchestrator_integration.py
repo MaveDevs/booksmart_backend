@@ -70,12 +70,22 @@ def test_create_appointment_triggers_orchestrator(monkeypatch):
 
 
 def test_update_appointment_status_change_triggers_confirmed(monkeypatch):
-    from app.models import Service
+    from datetime import date, time
+    from app.models import Service, User
     from app.services.notification_orchestrator import orchestrator
+    from app.models.notifications import Notification
 
-    existing = SimpleNamespace(cita_id=999, servicio_id=5, estado=AppointmentStatus.PENDIENTE)
-    service = SimpleNamespace(servicio_id=5, establecimiento_id=66)
-    db = _FakeDB({Service: service})
+    existing = SimpleNamespace(
+        cita_id=999,
+        cliente_id=42,
+        servicio_id=5,
+        estado=AppointmentStatus.PENDIENTE,
+        fecha=date(2026, 4, 20),
+        hora_inicio=time(14, 30),
+    )
+    service = SimpleNamespace(servicio_id=5, establecimiento_id=66, nombre="Corte premium", establishment=SimpleNamespace(nombre="Barbería Central"))
+    client = SimpleNamespace(usuario_id=42)
+    db = _FakeDB({Service: service, User: client})
 
     monkeypatch.setattr(crud_appointments, "get_appointment", lambda _db, _id: existing)
 
@@ -83,7 +93,7 @@ def test_update_appointment_status_change_triggers_confirmed(monkeypatch):
     monkeypatch.setattr(
         orchestrator,
         "on_appointment_confirmed_sync",
-        lambda _db, appointment_id, establishment_id: confirmed_calls.append((appointment_id, establishment_id)),
+        lambda _db, appointment_id, establishment_id, create_endpoint_notification=True: confirmed_calls.append((appointment_id, establishment_id, create_endpoint_notification)),
     )
 
     updated = crud_appointments.update_appointment(
@@ -93,7 +103,56 @@ def test_update_appointment_status_change_triggers_confirmed(monkeypatch):
     )
 
     assert updated.estado == AppointmentStatus.CONFIRMADA
-    assert confirmed_calls == [(999, 66)]
+    assert confirmed_calls == [(999, 66, False)]
+    assert len(db.added) == 1
+    assert isinstance(db.added[0], Notification)
+    assert db.added[0].usuario_id == 42
+    assert "Barbería Central" in db.added[0].mensaje
+    assert "Corte premium" in db.added[0].mensaje
+
+
+def test_update_appointment_status_change_triggers_rejected_notification(monkeypatch):
+    from datetime import date, time
+    from app.models import Service, User
+    from app.services.notification_orchestrator import orchestrator
+    from app.models.notifications import Notification
+
+    existing = SimpleNamespace(
+        cita_id=1001,
+        cliente_id=50,
+        servicio_id=6,
+        estado=AppointmentStatus.PENDIENTE,
+        fecha=date(2026, 4, 21),
+        hora_inicio=time(9, 0),
+    )
+    service = SimpleNamespace(servicio_id=6, establecimiento_id=77, nombre="Corte barba", establishment=SimpleNamespace(nombre="La Barbería"))
+    client = SimpleNamespace(usuario_id=50)
+    db = _FakeDB({Service: service, User: client})
+
+    monkeypatch.setattr(crud_appointments, "get_appointment", lambda _db, _id: existing)
+
+    rejected_calls = []
+    monkeypatch.setattr(
+        orchestrator,
+        "on_appointment_cancelled_sync",
+        lambda _db, appointment_id, establishment_id, reason=None, create_endpoint_notification=True: rejected_calls.append((appointment_id, establishment_id, reason, create_endpoint_notification)),
+    )
+
+    updated = crud_appointments.update_appointment(
+        db,
+        appointment_id=1001,
+        appointment=AppointmentUpdate(estado=AppointmentStatus.CANCELADA),
+        notification_event="rejected",
+    )
+
+    assert updated.estado == AppointmentStatus.CANCELADA
+    assert rejected_calls == [(1001, 77, None, False)]
+    assert len(db.added) == 1
+    assert isinstance(db.added[0], Notification)
+    assert db.added[0].usuario_id == 50
+    assert "rechazada" in db.added[0].mensaje
+    assert "La Barbería" in db.added[0].mensaje
+    assert "Corte barba" in db.added[0].mensaje
 
 
 def test_create_message_triggers_message_received(monkeypatch):
