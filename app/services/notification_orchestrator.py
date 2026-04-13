@@ -160,7 +160,11 @@ class NotificationOrchestrator:
             create_auto_notification(db, notif_2h)
 
     async def on_appointment_confirmed(
-        self, db: Session, appointment_id: int, establishment_id: int
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """
         Called when an appointment is confirmed by owner.
@@ -173,16 +177,17 @@ class NotificationOrchestrator:
 
         message = self._build_appointment_message(db, appointment, establishment_id, "confirmed")
 
-        in_app_notification = crud_notifications.create_notification(
-            db,
-            NotificationCreate(
-                usuario_id=appointment.cliente_id,
-                mensaje=message,
-                tipo=NotificationType.ALERTA,
-                leida=False,
-            ),
-        )
-        await notify_user(appointment.cliente_id, in_app_notification)
+        if create_endpoint_notification:
+            in_app_notification = crud_notifications.create_notification(
+                db,
+                NotificationCreate(
+                    usuario_id=appointment.cliente_id,
+                    mensaje=message,
+                    tipo=NotificationType.ALERTA,
+                    leida=False,
+                ),
+            )
+            await notify_user(appointment.cliente_id, in_app_notification)
 
         notif = AutoNotificationCreate(
             usuario_id=appointment.cliente_id,
@@ -194,12 +199,17 @@ class NotificationOrchestrator:
             mensaje=message,
             fecha_programada=datetime.utcnow(),
             url_accion="/app/appointments",
-                metadata=json.dumps({"mirror_to_notifications": True, "source": "appointment_update"}),
+            metadata=json.dumps({"mirror_to_notifications": True, "source": "appointment_update"}),
         )
         create_auto_notification(db, notif)
 
     async def on_appointment_cancelled(
-        self, db: Session, appointment_id: int, establishment_id: int, reason: Optional[str] = None
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        reason: Optional[str] = None,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """
         Called when an appointment is cancelled.
@@ -218,16 +228,17 @@ class NotificationOrchestrator:
             reason=reason,
         )
 
-        in_app_notification = crud_notifications.create_notification(
-            db,
-            NotificationCreate(
-                usuario_id=appointment.cliente_id,
-                mensaje=message,
-                tipo=NotificationType.ALERTA,
-                leida=False,
-            ),
-        )
-        await notify_user(appointment.cliente_id, in_app_notification)
+        if create_endpoint_notification:
+            in_app_notification = crud_notifications.create_notification(
+                db,
+                NotificationCreate(
+                    usuario_id=appointment.cliente_id,
+                    mensaje=message,
+                    tipo=NotificationType.ALERTA,
+                    leida=False,
+                ),
+            )
+            await notify_user(appointment.cliente_id, in_app_notification)
 
         notif = AutoNotificationCreate(
             usuario_id=appointment.cliente_id,
@@ -260,7 +271,11 @@ class NotificationOrchestrator:
             create_auto_notification(db, recovery_notif)
 
     async def on_appointment_completed(
-        self, db: Session, appointment_id: int, establishment_id: int
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """
         Called when an appointment is marked as completed.
@@ -279,16 +294,17 @@ class NotificationOrchestrator:
 
         message = self._build_appointment_message(db, appointment, establishment_id, "completed")
 
-        in_app_notification = crud_notifications.create_notification(
-            db,
-            NotificationCreate(
-                usuario_id=appointment.cliente_id,
-                mensaje=message,
-                tipo=NotificationType.ALERTA,
-                leida=False,
-            ),
-        )
-        await notify_user(appointment.cliente_id, in_app_notification)
+        if create_endpoint_notification:
+            in_app_notification = crud_notifications.create_notification(
+                db,
+                NotificationCreate(
+                    usuario_id=appointment.cliente_id,
+                    mensaje=message,
+                    tipo=NotificationType.ALERTA,
+                    leida=False,
+                ),
+            )
+            await notify_user(appointment.cliente_id, in_app_notification)
 
         # Schedule review request 1 hour after appointment
         review_request = AutoNotificationCreate(
@@ -401,11 +417,22 @@ class NotificationOrchestrator:
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_appointment_confirmed_sync(
-        self, db: Session, appointment_id: int, establishment_id: int
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """Synchronous version of on_appointment_confirmed"""
         try:
-            self._run_sync(self.on_appointment_confirmed(db, appointment_id, establishment_id))
+            self._run_sync(
+                self.on_appointment_confirmed(
+                    db,
+                    appointment_id,
+                    establishment_id,
+                    create_endpoint_notification=create_endpoint_notification,
+                )
+            )
         except Exception as e:
             logging.error(f"Notification orchestration failed: {e}")
 
@@ -415,21 +442,39 @@ class NotificationOrchestrator:
         appointment_id: int,
         establishment_id: int,
         reason: Optional[str] = None,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """Synchronous version of on_appointment_cancelled"""
         try:
             self._run_sync(
-                self.on_appointment_cancelled(db, appointment_id, establishment_id, reason)
+                self.on_appointment_cancelled(
+                    db,
+                    appointment_id,
+                    establishment_id,
+                    reason,
+                    create_endpoint_notification=create_endpoint_notification,
+                )
             )
         except Exception as e:
             logging.error(f"Notification orchestration failed: {e}")
 
     def on_appointment_completed_sync(
-        self, db: Session, appointment_id: int, establishment_id: int
+        self,
+        db: Session,
+        appointment_id: int,
+        establishment_id: int,
+        create_endpoint_notification: bool = True,
     ) -> None:
         """Synchronous version of on_appointment_completed"""
         try:
-            self._run_sync(self.on_appointment_completed(db, appointment_id, establishment_id))
+            self._run_sync(
+                self.on_appointment_completed(
+                    db,
+                    appointment_id,
+                    establishment_id,
+                    create_endpoint_notification=create_endpoint_notification,
+                )
+            )
         except Exception as e:
             logging.error(f"Notification orchestration failed: {e}")
 
