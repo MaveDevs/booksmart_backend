@@ -254,6 +254,25 @@ class NotificationOrchestrator:
         )
         create_auto_notification(db, notif)
 
+        # Notify business owner if the appointment had a confirmed or pending status
+        # This helps them stay aware of client-initiated cancellations
+        establishment = db.query(Establishment).filter(Establishment.establecimiento_id == establishment_id).first()
+        if establishment and establishment.usuario_id:
+            owner_message = f"Un cliente ha cancelado su cita para {service_name} {self._format_appointment_label(appointment)}."
+            owner_notif = AutoNotificationCreate(
+                usuario_id=establishment.usuario_id,
+                cita_id=appointment_id,
+                establecimiento_id=establishment_id,
+                tipo=AutoNotificationType.APPOINTMENT_CANCELLATION,
+                canal=NotificationChannel.PUSH,
+                titulo="Cita cancelada por cliente",
+                mensaje=owner_message,
+                fecha_programada=datetime.utcnow(),
+                url_accion="/app/negocio",
+                metadata=json.dumps({"mirror_to_notifications": True, "source": "business_alert"}),
+            )
+            create_auto_notification(db, owner_notif)
+
         # Recovery offer if feature enabled
         has_recovery = establishment_has_feature(db, establishment_id, FeatureKey.AUTO_RECOVERY)
         if has_recovery:
@@ -393,6 +412,41 @@ class NotificationOrchestrator:
 
         await notify_new_message(recipient_id, message)
 
+    async def on_review_created(
+        self, db: Session, review_id: int, establishment_id: int
+    ) -> None:
+        """
+        Called when a new review/rating is created.
+        Notifies the business owner.
+        """
+        from app.crud.crud_ratings import get_review
+        review = get_review(db, review_id)
+        if not review:
+            return
+
+        establishment = db.query(Establishment).filter(Establishment.establecimiento_id == establishment_id).first()
+        if not establishment or not establishment.usuario_id:
+            return
+
+        client_name = "Un cliente"
+        if review.user:
+            client_name = f"{review.user.nombre} {review.user.apellido}".strip()
+
+        message = f"{client_name} ha dejado una calificación de {review.estrellas} estrellas: \"{review.comentario[:50]}...\""
+        
+        notif = AutoNotificationCreate(
+            usuario_id=establishment.usuario_id,
+            establecimiento_id=establishment_id,
+            tipo=AutoNotificationType.REVIEW_REQUEST, # Reusing type or we could add REVIEW_RECEIVED
+            canal=NotificationChannel.PUSH,
+            titulo="Nueva reseña recibida",
+            mensaje=message,
+            fecha_programada=datetime.utcnow(),
+            url_accion="/app/negocio",
+            metadata=json.dumps({"mirror_to_notifications": True, "source": "review_alert"}),
+        )
+        create_auto_notification(db, notif)
+
     def _run_sync(self, coro) -> None:
         """Run coroutine from sync contexts, including AnyIO worker threads."""
         try:
@@ -484,6 +538,15 @@ class NotificationOrchestrator:
         """Synchronous version of on_message_received"""
         try:
             self._run_sync(self.on_message_received(db, message_id, establishment_id))
+        except Exception as e:
+            logging.error(f"Notification orchestration failed: {e}")
+
+    def on_review_created_sync(
+        self, db: Session, review_id: int, establishment_id: int
+    ) -> None:
+        """Synchronous version of on_review_created"""
+        try:
+            self._run_sync(self.on_review_created(db, review_id, establishment_id))
         except Exception as e:
             logging.error(f"Notification orchestration failed: {e}")
 

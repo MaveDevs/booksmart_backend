@@ -79,7 +79,13 @@ def create_review(
         )
     
     try:
-        return crud_ratings.create_review(db, review)
+        new_review = crud_ratings.create_review(db, review)
+        
+        # Trigger notification to owner
+        from app.services.notification_orchestrator import orchestrator
+        orchestrator.on_review_created_sync(db, new_review.valoracion_id, review.establecimiento_id)
+        
+        return new_review
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
