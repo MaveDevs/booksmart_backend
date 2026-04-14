@@ -45,14 +45,20 @@ El campo `trabajador_id` ahora es el que determina si la cita es asignada manual
 ```
 > **Nota:** Al enviar `trabajador_id: null`, el backend activa el **algoritmo de auto-asignación** y buscará al profesional disponible con menos carga.
 
+### C. Listar profesionales por Servicio
+Útil para llenar el selector de profesionales tras elegir un servicio.
+
+- **URL:** `GET /api/v1/workers/?establishment_id=X&servicio_id=Y` (Próximamente filtrado por servicio, por ahora filtrar en frontend o usar el listado general).
+- **Nota:** Actualmente se recomienda llamar a `GET /api/v1/workers?establishment_id={id}` y mostrar solo aquellos cuya especialidad coincida, o permitir que el cliente vea a todo el staff.
+
 ---
 
 ## 3. Guía de Interfaz de Usuario (UX)
 
-### Paso 1: Filtro de Profesionales
-Después de seleccionar un servicio, es recomendable dar la opción al cliente de elegir un profesional.
-- **Opción recomendada:** "Cualquiera" (seleccionada por defecto).
-- **Opción específica:** Listar a los trabajadores que devuelva `GET /api/v1/workers?establishment_id=X`.
+### Paso 1: Selección de Profesional (Filtro)
+Después de seleccionar un servicio, la app debe preguntar: *"¿Deseas elegir con quién?"*
+- **Opción A (Recomendada):** "Cualquiera" -> Invoca disponibilidad sin `trabajador_id`.
+- **Opción B:** Lista de profesionales -> Muestra nombre, foto y especialidad. Al elegir uno, se invoca disponibilidad enviando su `trabajador_id`.
 
 ### Paso 2: Calendario Dinámico
 - Si el cliente deja "Cualquiera", llama a los *slots* sin `trabajador_id`. Verá más horarios disponibles.
