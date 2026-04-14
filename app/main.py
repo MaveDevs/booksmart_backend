@@ -53,6 +53,7 @@ def _get_allowed_origins() -> list[str]:
             "http://localhost:8100",
             "http://booksmartutt.duckdns.org",
             "https://booksmartutt.duckdns.org",
+            "https://mavedevs.github.io",
         ]),
     )
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
