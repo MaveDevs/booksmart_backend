@@ -432,12 +432,16 @@ class NotificationOrchestrator:
         if review.user:
             client_name = f"{review.user.nombre} {review.user.apellido}".strip()
 
-        message = f"{client_name} ha dejado una calificación de {review.calificacion} estrellas: \"{review.comentario[:50]}...\""
+        comentario_preview = ""
+        if review.comentario:
+            comentario_preview = f": \"{review.comentario[:50]}...\""
+        
+        message = f"{client_name} ha dejado una calificación de {review.calificacion} estrellas{comentario_preview}"
         
         notif = AutoNotificationCreate(
             usuario_id=establishment.usuario_id,
             establecimiento_id=establishment_id,
-            tipo=AutoNotificationType.REVIEW_REQUEST, # Reusing type or we could add REVIEW_RECEIVED
+            tipo=AutoNotificationType.REVIEW_REQUEST,
             canal=NotificationChannel.PUSH,
             titulo="Nueva reseña recibida",
             mensaje=message,

@@ -56,7 +56,11 @@ def create_auto_notification(
 ) -> AutoNotification:
     """Create a new automatic notification"""
     notif_data = notification.model_dump()
-    db_notification = AutoNotification(**notif_data)  # type: ignore[arg-type]
+    # Map 'metadata' from schema to 'metadata_json' for the model
+    if "metadata" in notif_data:
+        notif_data["metadata_json"] = notif_data.pop("metadata")
+        
+    db_notification = AutoNotification(**notif_data)
     db.add(db_notification)
     db.commit()
     db.refresh(db_notification)
