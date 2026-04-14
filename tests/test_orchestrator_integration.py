@@ -7,14 +7,28 @@ from app.schemas.messages import MessageCreate
 
 
 class _FakeQuery:
-    def __init__(self, first_value):
-        self._first_value = first_value
+    def __init__(self, value):
+        self._value = value
 
     def filter(self, *_args, **_kwargs):
         return self
 
+    def join(self, *_args, **_kwargs):
+        return self
+
     def first(self):
-        return self._first_value
+        # If it's a list, return first item, else just return value
+        if isinstance(self._value, list):
+            return self._value[0] if self._value else None
+        return self._value
+
+    def all(self):
+        # Ensure it returns a list
+        if self._value is None:
+            return []
+        if isinstance(self._value, list):
+            return self._value
+        return [self._value]
 
 
 class _FakeDB:
@@ -41,12 +55,18 @@ class _FakeDB:
 
 
 def test_create_appointment_triggers_orchestrator(monkeypatch):
-    from app.models import Service, User
+    from app.models import Service, User, Worker
     from app.services.notification_orchestrator import orchestrator
 
-    service = SimpleNamespace(servicio_id=7, establecimiento_id=55)
+    service = SimpleNamespace(servicio_id=7, establecimiento_id=55, duracion=30)
     client = SimpleNamespace(usuario_id=42)
-    db = _FakeDB({User: client, Service: service})
+    worker = SimpleNamespace(trabajador_id=1, establecimiento_id=55, services=[service], activo=True)
+    
+    db = _FakeDB({
+        User: client, 
+        Service: service,
+        Worker: [worker]
+    })
 
     calls = []
     monkeypatch.setattr(
