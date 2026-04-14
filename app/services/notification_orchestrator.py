@@ -432,7 +432,7 @@ class NotificationOrchestrator:
         if review.user:
             client_name = f"{review.user.nombre} {review.user.apellido}".strip()
 
-        message = f"{client_name} ha dejado una calificación de {review.estrellas} estrellas: \"{review.comentario[:50]}...\""
+        message = f"{client_name} ha dejado una calificación de {review.calificacion} estrellas: \"{review.comentario[:50]}...\""
         
         notif = AutoNotificationCreate(
             usuario_id=establishment.usuario_id,

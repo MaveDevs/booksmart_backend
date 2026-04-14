@@ -83,7 +83,7 @@ def create_review(
         
         # Trigger notification to owner
         from app.services.notification_orchestrator import orchestrator
-        orchestrator.on_review_created_sync(db, new_review.valoracion_id, review.establecimiento_id)
+        orchestrator.on_review_created_sync(db, new_review.resena_id, review.establecimiento_id)
         
         return new_review
     except ValueError as e:
