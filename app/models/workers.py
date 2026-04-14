@@ -24,3 +24,6 @@ class Worker(Base):
 	
 	establishment = relationship("Establishment", back_populates="workers")
 	user = relationship("User", back_populates="worker_profiles")
+	
+	# Relationship many-to-many with services
+	services = relationship("Service", secondary="trabajador_servicio", back_populates="workers")

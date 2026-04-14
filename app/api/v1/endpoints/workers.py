@@ -137,3 +137,34 @@ def delete_worker(
 	if success:
 		return {"detail": "Worker deleted successfully"}
 	raise HTTPException(status_code=500, detail="Error deleting worker")
+
+
+@router.post("/{worker_id}/services")
+def set_worker_services(
+	worker_id: int,
+	service_ids: List[int],
+	db: Session = Depends(deps.get_db),
+	current_user: User = Depends(require_owner_or_admin()),
+):
+	"""Sets the list of services a worker can perform."""
+	db_worker = crud_workers.get_worker(db, worker_id)
+	if not db_worker:
+		raise HTTPException(status_code=404, detail="Worker not found")
+	
+	establishment = crud_establishments.get_establishment(db, db_worker.establecimiento_id)
+	if establishment:
+		validate_establishment_access(current_user, establishment)
+		
+	updated_worker = crud_workers.set_worker_services(db, worker_id, service_ids)
+	return {"message": "Servicios actualizados correctamente"}
+
+
+@router.get("/{worker_id}/services")
+def get_worker_services(
+	worker_id: int,
+	db: Session = Depends(deps.get_db),
+	current_user: User = Depends(deps.get_current_user),
+):
+	"""Gets the list of services assigned to a worker."""
+	services = crud_workers.get_worker_services(db, worker_id)
+	return services

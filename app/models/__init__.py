@@ -11,6 +11,7 @@ from .special_closures import SpecialClosure
 from .appointments import Appointment
 from .messages import Message
 from .workers import Worker
+from .worker_services import WorkerService
 
 from .notifications import Notification
 from .auto_notifications import AutoNotification, AutoNotificationType, NotificationChannel, AutoNotificationStatus

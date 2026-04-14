@@ -16,3 +16,4 @@ class Service(Base):
 
     establishment = relationship("Establishment", back_populates="services")
     appointments = relationship("Appointment", back_populates="service")
+    workers = relationship("Worker", secondary="trabajador_servicio", back_populates="services")

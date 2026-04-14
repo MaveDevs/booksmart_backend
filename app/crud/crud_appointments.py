@@ -133,14 +133,87 @@ def create_appointment(db: Session, appointment: AppointmentCreate) -> Appointme
     if not service:
         raise ValueError(f"Service with id {appointment.servicio_id} does not exist")
     
+    from app.models.workers import Worker
+    from datetime import datetime, timedelta
+
+    # Auto-assignment logic if trabajador_id is not provided
+    assigned_worker_id = appointment.trabajador_id
+
+    if not assigned_worker_id:
+        # Find all workers that offer this service
+        qualified_workers = db.query(Worker).join(Worker.services).filter(
+            Service.servicio_id == appointment.servicio_id,
+            Worker.establecimiento_id == service.establecimiento_id,
+            Worker.activo == True
+        ).all()
+
+        if not qualified_workers:
+            raise ValueError("No hay profesionales registrados que realicen este servicio.")
+
+        # For each qualified worker, check if they are busy at this time
+        # We'll pick the first one who is free
+        # A more advanced version could pick the one with the least load
+        best_worker_id = None
+        
+        # Calculate end time for the potential appointment
+        end_time = (datetime.combine(appointment.fecha, appointment.hora_inicio) + timedelta(minutes=service.duracion)).time()
+
+        for worker in qualified_workers:
+            # Check for overlapping appointments for THIS worker
+            conflict = db.query(Appointment).filter(
+                Appointment.trabajador_id == worker.trabajador_id,
+                Appointment.fecha == appointment.fecha,
+                Appointment.estado.in_(["CONFIRMADA", "PENDIENTE"]),
+                Appointment.hora_inicio < end_time,
+                Appointment.hora_fin > appointment.hora_inicio
+            ).first()
+
+            if not conflict:
+                best_worker_id = worker.trabajador_id
+                break
+        
+        if not best_worker_id:
+            raise ValueError("Lo sentimos, no hay profesionales disponibles en el horario seleccionado.")
+        
+        assigned_worker_id = best_worker_id
+
+    else:
+        # Validate that the manually selected worker actually performs this service
+        worker = db.query(Worker).filter(Worker.trabajador_id == assigned_worker_id).first()
+        if not worker or worker.establecimiento_id != service.establecimiento_id:
+            raise ValueError("El profesional seleccionado no pertenece a este negocio.")
+        
+        # Check if the selected worker offers this service
+        service_ids = [s.servicio_id for s in worker.services]
+        if service.servicio_id not in service_ids:
+            raise ValueError(f"El profesional {worker.nombre} no ofrece el servicio seleccionado.")
+
+        # Check for conflicts for the specific worker
+        end_time = (datetime.combine(appointment.fecha, appointment.hora_inicio) + timedelta(minutes=service.duracion)).time()
+        conflict = db.query(Appointment).filter(
+            Appointment.trabajador_id == assigned_worker_id,
+            Appointment.fecha == appointment.fecha,
+            Appointment.estado.in_(["CONFIRMADA", "PENDIENTE"]),
+            Appointment.hora_inicio < end_time,
+            Appointment.hora_fin > appointment.hora_inicio
+        ).first()
+
+        if conflict:
+            raise ValueError("El profesional seleccionado ya tiene una cita en ese horario.")
+
+    # Calculate final duration based on service
+    final_hora_fin = (datetime.combine(appointment.fecha, appointment.hora_inicio) + timedelta(minutes=service.duracion)).time()
+
     appointment_data = appointment.model_dump()
-    db_appointment = Appointment(**appointment_data)  # type: ignore[arg-type]
+    appointment_data["trabajador_id"] = assigned_worker_id
+    appointment_data["hora_fin"] = final_hora_fin
+    
+    db_appointment = Appointment(**appointment_data)
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
 
     from app.services.notification_orchestrator import orchestrator
-
     orchestrator.on_appointment_created_sync(
         db, db_appointment.cita_id, service.establecimiento_id
     )

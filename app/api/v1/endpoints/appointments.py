@@ -274,23 +274,21 @@ def decline_appointment(
 def get_available_slots(
     servicio_id: int,
     target_date: date,
+    trabajador_id: Optional[int] = Query(None),
     db: Session = Depends(deps.get_db),
 ):
     """
-    Mobile/Web: Get available time slots for a specific service on a specific date.
-    Note: Basic logic. In production, this computes existing Citas vs Agenda.
+    Get available time slots for a specific service on a specific date.
+    Logic upgraded to support multiple workers and concurrency.
     """
+    from app.crud import crud_agendas, crud_workers
+    from app.models.workers import Worker
+
     service = crud_services.get_service(db, servicio_id)
     if service is None:
-        return {
-            "date": target_date.strftime("%Y-%m-%d"),
-            "servicio_id": servicio_id,
-            "available_slots": [],
-            "busy_slots": [],
-            "closed": True,
-            "closure_reason": "Servicio no encontrado",
-        }
+        raise HTTPException(status_code=404, detail="Service not found")
 
+    # 1. Check for special closures
     matching_closure = crud_special_closures.get_closure_by_date(db, service.establecimiento_id, target_date)
     if matching_closure:
         return {
@@ -299,27 +297,108 @@ def get_available_slots(
             "available_slots": [],
             "busy_slots": [],
             "closed": True,
-            "closure_reason": matching_closure.motivo or "Cerrado por feriado",
+            "closure_reason": matching_closure.motivo or "Cerrado por día especial",
         }
 
-    # 1. Simulate pulling the business Agenda (e.g. 09:00 to 18:00)
-    # 2. Simulate pulling the service duration (e.g. 1 hour)
-    # 3. Pull all CONFIRMADA appointments for that day and service.
-    appointments = crud_appointments.get_appointments(db, servicio_id=servicio_id, limit=200)
-    busy_times = [
-        appt.hora_inicio.strftime("%H:%M") for appt in appointments
-        if appt.fecha == target_date and appt.estado in ["CONFIRMADA", "PENDIENTE"]
-    ]
+    # 2. Check business agenda for the day
+    days = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+    day_name = days[target_date.weekday()]
+    agendas = crud_agendas.get_agendas(db, establecimiento_id=service.establecimiento_id)
+    day_agenda = next((a for a in agendas if a.dia_semana == day_name), None)
     
-    # Generic simplified daily slots list
-    daily_slots = ["09:00", "10:00", "11:00", "12:00", "13:00", "15:00", "16:00", "17:00"]
-    available_slots = [slot for slot in daily_slots if slot not in busy_times]
+    if not day_agenda:
+        return {
+            "date": target_date.strftime("%Y-%m-%d"),
+            "servicio_id": servicio_id,
+            "available_slots": [],
+            "busy_slots": [],
+            "closed": True,
+            "closure_reason": "No hay horario de servicio para este día",
+        }
+
+    # 3. Identify qualified workers
+    if trabajador_id:
+        worker = crud_workers.get_worker(db, trabajador_id)
+        if not worker or worker.establecimiento_id != service.establecimiento_id:
+             raise HTTPException(status_code=404, detail="Worker not found or doesn't belong to this establishment")
+        # Verify worker provides this service
+        service_ids = [s.servicio_id for s in worker.services]
+        if servicio_id not in service_ids:
+            return {
+                "date": target_date.strftime("%Y-%m-%d"),
+                "servicio_id": servicio_id,
+                "available_slots": [],
+                "busy_slots": [],
+                "closed": False,
+                "closure_reason": "El trabajador seleccionado no ofrece este servicio",
+            }
+        qualified_workers = [worker]
+    else:
+        # Get all workers that offer this service
+        qualified_workers = db.query(Worker).join(Worker.services).filter(
+            Service.servicio_id == servicio_id,
+            Worker.establecimiento_id == service.establecimiento_id,
+            Worker.activo == True
+        ).all()
+
+    if not qualified_workers:
+         return {
+            "date": target_date.strftime("%Y-%m-%d"),
+            "servicio_id": servicio_id,
+            "available_slots": [],
+            "busy_slots": [],
+            "closed": False,
+            "closure_reason": "No hay profesionales disponibles para este servicio",
+        }
+
+    # 4. Get all appointments for those workers on that date
+    worker_ids = [w.trabajador_id for w in qualified_workers]
+    appointments = db.query(Appointment).filter(
+        Appointment.trabajador_id.in_(worker_ids),
+        Appointment.fecha == target_date,
+        Appointment.estado.in_(["CONFIRMADA", "PENDIENTE"])
+    ).all()
+
+    # 5. Generate slots based on agenda and service duration
+    # This is a simplified slot generator. In a real world, you'd calculate overlapping.
+    # We'll use the service duration to step through the agenda.
+    start_dt = datetime.combine(target_date, day_agenda.hora_inicio)
+    end_dt = datetime.combine(target_date, day_agenda.hora_fin)
     
+    interval = service.duracion # in minutes
+    if interval <= 0: interval = 30 # fallback
+    
+    current_dt = start_dt
+    available_slots = []
+    busy_slots = []
+
+    while current_dt + timedelta(minutes=interval) <= end_dt:
+        slot_time = current_dt.time()
+        slot_end_time = (current_dt + timedelta(minutes=interval)).time()
+        
+        # Check how many workers are busy during this specific slot
+        # For simplicity, we check if a worker has an appointment starting at this time
+        # Better logic would check if worker is busy at ANY point during this slot
+        busy_workers_count = 0
+        for appt in appointments:
+             # Basic overlap check: appt starts before slot ends AND appt ends after slot starts
+             if appt.hora_inicio < slot_end_time and appt.hora_fin > slot_time:
+                 busy_workers_count += 1
+        
+        slot_str = slot_time.strftime("%H:%M")
+        if busy_workers_count < len(qualified_workers):
+            available_slots.append(slot_str)
+        else:
+            busy_slots.append(slot_str)
+            
+        current_dt += timedelta(minutes=interval)
+
     return {
         "date": target_date.strftime("%Y-%m-%d"),
         "servicio_id": servicio_id,
+        "worker_count": len(qualified_workers),
         "available_slots": available_slots,
-        "busy_slots": busy_times,
+        "busy_slots": busy_slots,
         "closed": False,
         "closure_reason": None,
     }

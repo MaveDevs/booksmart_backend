@@ -128,3 +128,32 @@ def delete_worker(db: Session, worker_id: int) -> bool:
 	db.delete(db_worker)
 	db.commit()
 	return True
+
+
+def set_worker_services(db: Session, worker_id: int, service_ids: List[int]) -> Optional[Worker]:
+	"""
+	Sets the list of services a worker can perform.
+	Bulk updates the association table.
+	"""
+	db_worker = get_worker(db, worker_id)
+	if not db_worker:
+		return None
+	
+	if not service_ids:
+		db_worker.services = []
+	else:
+		# Fetch all requested services in one query
+		services = db.query(Service).filter(Service.servicio_id.in_(service_ids)).all()
+		db_worker.services = services
+		
+	db.commit()
+	db.refresh(db_worker)
+	return db_worker
+
+
+def get_worker_services(db: Session, worker_id: int) -> List[Service]:
+	"""Gets all services assigned to a worker."""
+	db_worker = get_worker(db, worker_id)
+	if not db_worker:
+		return []
+	return db_worker.services
