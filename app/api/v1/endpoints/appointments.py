@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.crud import crud_appointments, crud_services, crud_establishments, crud_special_closures
-from app.models import User
+from app.models import User, Appointment, Service
 from app.schemas.appointments import AppointmentCreate, AppointmentResponse, AppointmentUpdate
 from app.core.permissions import (
     RoleType,
@@ -14,7 +14,7 @@ from app.core.permissions import (
     require_owner_or_admin,
     check_owns_appointment_establishment
 )
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 router = APIRouter()
 

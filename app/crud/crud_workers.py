@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Establishment, Worker, User
+from app.models import Establishment, Worker, User, Service
 from app.schemas.workers import WorkerCreate, WorkerUpdate
 from app.crud.crud_users import get_user_by_email
 from app.core.security import get_password_hash
