@@ -67,7 +67,7 @@ def create_worker(db: Session, worker: WorkerCreate) -> Worker:
 			db.flush()
 			usuario_id = new_user.usuario_id
 
-	db_worker = Worker(**worker.model_dump())
+	db_worker = Worker(**worker.model_dump(exclude={"contrasena"}))
 	if usuario_id:
 		db_worker.usuario_id = usuario_id
 		
@@ -103,14 +103,14 @@ def update_worker(db: Session, worker_id: int, worker: WorkerUpdate) -> Optional
 	
 	
 	# Handle password update
-	if "contrasena" in update_data and update_data["contrasena"]:
-		if db_worker.usuario_id:
+	if "contrasena" in update_data:
+		raw_password = update_data.pop("contrasena")
+		if raw_password and raw_password.strip() and db_worker.usuario_id:
 			from app.models import User
 			from app.core.security import get_password_hash
 			db_user = db.query(User).filter(User.usuario_id == db_worker.usuario_id).first()
-			if db_user and update_data["contrasena"].strip():
-				db_user.contrasena_hash = get_password_hash(update_data["contrasena"].strip())
-		update_data.pop("contrasena") # Remove from worker table update
+			if db_user:
+				db_user.contrasena_hash = get_password_hash(raw_password.strip())
 	
 	for field, value in update_data.items():
 		setattr(db_worker, field, value)
