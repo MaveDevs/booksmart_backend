@@ -74,4 +74,4 @@ Todos los frontends deben entender el modelo de `Subscription` y `PlanFeature`.
 | **Admin** | Editor de Planes | Poder cambiar precios y features desde la web. |
 
 ---
-*Documentación generada por Antigravity para el equipo de MaveDevs.*
+
